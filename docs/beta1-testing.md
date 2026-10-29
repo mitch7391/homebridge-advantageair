@@ -122,6 +122,46 @@ confirmation or a qualified supervised procedure; do not deliberately close all
 outlets on a running system to test this beta. Report existing observations of
 controller overrides with model/firmware and readback, not guessed guarantees.
 
+## Zone layout hardware acceptance — 26 October 2026
+
+Configurable zone layouts are in development for an upcoming beta, not included
+in published Beta 2. See the [configuration and migration guidance](v3-migration.md#zone-layout-options-development-not-included-in-published-beta-2)
+for Switch / Light, Lights, Fans and optional **Link Zone Temperatures**. Defaults
+retain the existing layout. Save settings and restart the Advantage Air child
+bridge (or Homebridge if not using a child bridge) to apply a deliberate change.
+
+The maintainer tested the conditional temperature-subtype reconciliation candidate
+on a Raspberry Pi with Homebridge 2.4.0, Node.js 24.22.0 and a real e-zone controller
+with six temperature-equipped zones, retaining pairing and cached accessories:
+
+- Enabling linked temperatures with Switch controls passed as a baseline check.
+- Switches → Lights and Lights → Fans passed with temperatures kept linked
+  throughout. After each normal child-bridge restart, Apple Home showed the
+  selected controls, working single-tap On/Off and accessible temperatures.
+  Original room assignments were retained.
+- A scene and automation created for the current layout survived an additional
+  restart with no layout or temperature-linking change.
+
+**Observed limitation:** deliberate control-type changes removed or cleared
+affected automation actions, deleted scenes containing only affected zones, and
+removed affected zone actions from mixed scenes. Layout or temperature-linking
+changes can change HomeKit service identities even though zone accessory UUIDs
+remain stable. Record scenes and automations beforehand and expect to recreate
+affected ones; neither the plugin nor a switch back repairs them automatically.
+
+An earlier already-paired disposable HomeKit experiment independently confirmed
+temperature-service identity repair, corrected Fan quick-toggle presentation,
+retained pairing/room assignment and stable identifiers on a subsequent restart.
+It is separate evidence from the actual plugin settings-UI trial above.
+
+Fans → Switches, all six directed transitions, other controller models,
+percentage-controlled real hardware and every scene/automation combination were
+not physically qualified by this campaign. Automated tests cover broader layout,
+identity, sensor-fault and recovery cases; they do not replace hardware acceptance.
+These options do not add individual zone thermostats or alter controller airflow
+safeguards. Do not deliberately induce hardware faults or unsafe airflow to test
+layouts. Subsequent maintainer acceptance on Homebridge 2.4.0 / Node 24 confirmed the corrected single-controller settings form, populated values, unchanged Save, compact warning, and accurate logs for deliberate Switches → Fans → Switches transitions and restoration of separate temperature sensors.
+
 ## Reporting
 
 - Successful installations and controller compatibility feedback: [Beta 1 feedback](https://github.com/mitch7391/homebridge-advantageair/discussions/143).

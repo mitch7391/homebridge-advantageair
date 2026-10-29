@@ -22,6 +22,7 @@ import { MyZoneManager } from './accessories/myZoneManager.js';
 import { PercentageZoneManager } from './accessories/percentageZoneManager.js';
 import { DuplicateControllerError, ZoneTemperatureManager } from './accessories/zoneTemperatureManager.js';
 import { zoneLayout } from './accessories/zoneLayout.js';
+import { captureZoneLayouts, reportZoneLayoutChanges } from './accessories/zoneLayoutLogging.js';
 
 interface ConfiguredController {
   refreshAccessories: () => void;
@@ -186,9 +187,11 @@ export class AdvantageAirPlatform implements DynamicPlatformPlugin {
         let latestState: ControllerPollState = { lastAttemptFailed: false };
         const refreshAccessories = (coordinator: ControllerCoordinator) => {
           let updateFailed = false;
+          let previousLayouts: ReturnType<typeof captureZoneLayouts> | undefined;
           if (latestState.data && !latestState.lastAttemptFailed) {
             try {
               claimController(this.api, latestState.data, owner);
+              previousLayouts = captureZoneLayouts(this.api, this.accessories, latestState.data);
             } catch (error) {
               if (error instanceof DuplicateControllerError) {
                 coordinator.stop();
@@ -210,6 +213,11 @@ export class AdvantageAirPlatform implements DynamicPlatformPlugin {
               }
               updateFailed = true;
             }
+          }
+          if (previousLayouts && !updateFailed && latestState.data) {
+            reportZoneLayoutChanges(previousLayouts, captureZoneLayouts(this.api, this.accessories, latestState.data),
+              message => this.log.info(`Controller ${index + 1}:`, message),
+              message => this.log.warn(`Controller ${index + 1}:`, message));
           }
           if (updateFailed && !accessoryUpdateFailed) {
             this.log.error(

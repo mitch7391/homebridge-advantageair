@@ -9,7 +9,7 @@ import { PLATFORM_NAME, PLUGIN_NAME } from '../settings.js';
 import {
   ZoneTemperatureAccessory,
 } from './zoneTemperatureAccessory.js';
-import { cachedZoneControlType, zoneControlService } from './zoneLayout.js';
+import { cachedZoneControlType, reconcileLinkedTemperature, zoneControlService } from './zoneLayout.js';
 
 interface TemperatureBinding {
   handler: ZoneTemperatureAccessory;
@@ -103,25 +103,29 @@ export class ZoneTemperatureManager {
           'temperature',
         ]));
 
-        const existingBinding = this.bindings.get(uuid);
-
-        if (existingBinding) {
-          const accessory = this.accessories.get(uuid);
-          if (accessory) {
-            updateAccessoryInformation(this.api, accessory, state.data.system.sysType, true);
-          }
-          existingBinding.airconKey = device.airconKey;
-          existingBinding.zoneKey = device.zoneKey;
-          existingBinding.present = true;
-          continue;
-        }
-
         const cachedAccessory = this.accessories.get(uuid);
         const controlId = this.api.hap.uuid.generate(JSON.stringify([device.identity, 'zone-switch']));
         const control = this.accessories.get(controlId);
         const ownedControl = control?.context.advantageAirZoneSwitch === true ? control : undefined;
         // Controls are reconciled first. Never remove a separate sensor until its linked host is available.
         if (this.linkTemperatures && !ownedControl) {
+          continue;
+        }
+        const linkedChanged = this.linkTemperatures && reconcileLinkedTemperature(
+          this.api, ownedControl!, zoneControlService(this.api, ownedControl!, cachedZoneControlType(ownedControl!), false),
+        );
+        const existingBinding = this.bindings.get(uuid);
+        if (existingBinding) {
+          const accessory = this.linkTemperatures ? ownedControl : cachedAccessory;
+          if (accessory) {
+            updateAccessoryInformation(this.api, accessory, state.data.system.sysType, true);
+            if (linkedChanged) {
+              this.api.updatePlatformAccessories([accessory]);
+            }
+          }
+          existingBinding.airconKey = device.airconKey;
+          existingBinding.zoneKey = device.zoneKey;
+          existingBinding.present = true;
           continue;
         }
         const accessory = this.linkTemperatures

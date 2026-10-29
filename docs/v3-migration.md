@@ -98,7 +98,7 @@ zero closes the zone without writing a zero opening value. Sensor-controlled
 zones do not expose an opening slider. Controller rules and MyZone protection
 are unchanged.
 
-**Link temperatures to zone controls** is independent of the control type and
+**Link Zone Temperatures** is independent of the control type and
 defaults to off. Off keeps separate temperature accessories. On places each
 temperature sensor within its corresponding sensor-equipped zone control and
 removes the separate copy after valid controller discovery. Sensorless zones
@@ -112,13 +112,22 @@ Save and restart Homebridge or the child bridge to apply a change. Layout change
 wait for a valid response identifying the affected zones. An outage or failed
 sensor does not request a different layout.
 
-**Back up Homebridge before changing an existing layout.** Default upgrades retain
-the existing accessory identities and services. Opting into another service type
-or moving a temperature service may require rearranging Apple Home accessories
-and repairing scenes or automations, even where the zone's accessory UUID remains
-the same. Switching back does not guarantee restoration of Home arrangements.
+**Back up Homebridge and record affected scenes and automations before changing
+an existing layout.** Default upgrades retain the existing accessory identities
+and services. Changing control type or temperature linking can remove affected
+scene and automation actions. In e-zone testing, control-type changes cleared or
+removed affected automation actions, deleted zone-only scenes, and removed zone
+actions from mixed scenes. Recreate affected scenes and automations as needed;
+switching back does not automatically restore them.
+
+Native zone accessory UUIDs are retained. Room assignments and pairing were
+preserved during the physically tested linked Switches → Lights → Fans sequence.
+A scene and automation also survived an unchanged child-bridge restart. These
+results do not establish every controller or transition; see the
+[hardware acceptance record](beta1-testing.md#zone-layout-hardware-acceptance--26-october-2026).
 Do not clear the whole accessory cache or remove/re-pair the bridge for this change.
-Restoring a v3-like layout does not transfer Cmd4 accessory identities.
+Restoring a v3-like layout does not transfer Cmd4 accessory identities or rooms.
+Native v4 and legacy v3 remain separate plugins, and v3 migration is optional.
 
 The grouped MyZone switches, main thermostat, Ventilation/Dry Fans and native
 countdown Timer keep their existing presentation. RotationDirection-based MyZone

@@ -64,7 +64,9 @@ Automatically discovers individual MyPlace lights:
 
 #### Optional Zone Layouts
 
-Choose how zones appear in Apple Home using **Zone Control Type** in each controller's settings:
+*In development for an upcoming beta; not included in published Beta 2.*
+
+Choose how zones appear in Apple Home using **Zone Control Type** in each controller's Homebridge plugin settings:
 
 | Layout | Zones with temperature sensors | Sensorless percentage zones |
 | --- | --- | --- |
@@ -74,9 +76,12 @@ Choose how zones appear in Apple Home using **Zone Control Type** in each contro
 
 For zones without temperature sensors, the **Brightness** or **Rotation Speed** slider adjusts how far the zone damper opens (0-100%). These Apple Home controls represent damper position rather than actual light brightness or air conditioner fan speed.
 
-Enable **'Link temperatures to zone controls'** to include each available zone temperature sensor within its corresponding zone accessory, rather than creating a separate temperature accessory. This option works independently of the selected layout and is disabled by default.
+Enable **Link Zone Temperatures** to show readings from supported zone temperature sensors within their corresponding controls instead of separate temperature accessories. This works independently of the chosen layout and is off by default. Sensorless zones do not gain temperature sensors, and sensor-equipped controls do not gain damper-opening sliders.
 
-The default configuration retains the existing accessory layout. Changing layouts or temperature linking may affect Apple Home arrangements, scenes and automations. Back up Homebridge before changing an existing setup. See the [v3 Migration Guide](docs/v3-migration.md) for details.
+Save settings and restart the Advantage Air child bridge (or Homebridge if not using a child bridge). Existing configurations keep **Switch / Light** with separate temperatures; no layout change is required.
+
+> [!WARNING]
+> Back up Homebridge before changing zone control types or temperature linking. Affected scene and automation actions can be removed; scenes containing only affected zones may be deleted. You may need to recreate them. Zone accessory identities are retained without removing or re-pairing accessories. Room assignments were retained in e-zone hardware testing, and a scene and automation survived an unchanged restart. See the [layout and migration guidance](docs/v3-migration.md#zone-layout-options-development-not-included-in-published-beta-2) and [hardware evidence and limitations](docs/beta1-testing.md#zone-layout-hardware-acceptance--26-october-2026).
 
 ### Additional Controls
 
