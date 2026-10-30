@@ -154,13 +154,13 @@ temperature-service identity repair, corrected Fan quick-toggle presentation,
 retained pairing/room assignment and stable identifiers on a subsequent restart.
 It is separate evidence from the actual plugin settings-UI trial above.
 
-Fans → Switches, all six directed transitions, other controller models,
-percentage-controlled real hardware and every scene/automation combination were
-not physically qualified by this campaign. Automated tests cover broader layout,
-identity, sensor-fault and recovery cases; they do not replace hardware acceptance.
-These options do not add individual zone thermostats or alter controller airflow
-safeguards. Do not deliberately induce hardware faults or unsafe airflow to test
-layouts. Subsequent maintainer acceptance on Homebridge 2.4.0 / Node 24 confirmed the corrected single-controller settings form, populated values, unchanged Save, compact warning, and accurate logs for deliberate Switches → Fans → Switches transitions and restoration of separate temperature sensors.
+**Additional acceptance — 29 October 2026:** Subsequent maintainer testing on Homebridge 2.4.0 / Node 24 with the real e-zone controller confirmed deliberate Switches → Fans → Switches transitions. Disabling temperature linking when returning to Switches restored all six separate temperature accessories. Pairing, accessory identities and room assignments were preserved.
+
+The corrected single-controller settings form displayed populated values, supported an unchanged Save and presented the compact migration warning correctly. Controller-indexed logs accurately reported layout changes, temperature reconciliation and HomeKit identity warnings.
+
+**Remaining hardware qualification:** Not all six directed layout transitions, other controller models, percentage-controlled real hardware or every scene/automation combination have been physically tested. Automated tests provide broader coverage of layouts, accessory identities, sensor faults and recovery, but do not replace hardware acceptance.
+
+These options do not add individual zone thermostats or alter controller airflow safeguards. Do not deliberately induce hardware faults or unsafe airflow to test layouts.
 
 ## Reporting
 
