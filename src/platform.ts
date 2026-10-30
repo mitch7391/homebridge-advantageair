@@ -21,6 +21,8 @@ import { ModeFanManager } from './accessories/modeFanManager.js';
 import { MyZoneManager } from './accessories/myZoneManager.js';
 import { PercentageZoneManager } from './accessories/percentageZoneManager.js';
 import { DuplicateControllerError, ZoneTemperatureManager } from './accessories/zoneTemperatureManager.js';
+import { zoneLayout } from './accessories/zoneLayout.js';
+import { captureZoneLayouts, reportZoneLayoutChanges } from './accessories/zoneLayoutLogging.js';
 
 interface ConfiguredController {
   refreshAccessories: () => void;
@@ -131,6 +133,7 @@ export class AdvantageAirPlatform implements DynamicPlatformPlugin {
         if (device.debug !== undefined && typeof device.debug !== 'boolean') {
           throw new Error('Debug must be true or false.');
         }
+        const layout = zoneLayout(device);
 
         const ipAddress = device.ipAddress.trim();
         const port = device.port ?? 2025;
@@ -175,6 +178,7 @@ export class AdvantageAirPlatform implements DynamicPlatformPlugin {
           this.accessories,
           accessoryName => this.log.info(name, 'Created accessory:', accessoryName),
           owner,
+          layout.linkTemperatures,
         );
 
         const updateManagers: Array<(state: ControllerPollState) => void> = [
@@ -183,9 +187,11 @@ export class AdvantageAirPlatform implements DynamicPlatformPlugin {
         let latestState: ControllerPollState = { lastAttemptFailed: false };
         const refreshAccessories = (coordinator: ControllerCoordinator) => {
           let updateFailed = false;
+          let previousLayouts: ReturnType<typeof captureZoneLayouts> | undefined;
           if (latestState.data && !latestState.lastAttemptFailed) {
             try {
               claimController(this.api, latestState.data, owner);
+              previousLayouts = captureZoneLayouts(this.api, this.accessories, latestState.data);
             } catch (error) {
               if (error instanceof DuplicateControllerError) {
                 coordinator.stop();
@@ -207,6 +213,11 @@ export class AdvantageAirPlatform implements DynamicPlatformPlugin {
               }
               updateFailed = true;
             }
+          }
+          if (previousLayouts && !updateFailed && latestState.data) {
+            reportZoneLayoutChanges(previousLayouts, captureZoneLayouts(this.api, this.accessories, latestState.data),
+              message => this.log.info(`Controller ${index + 1}:`, message),
+              message => this.log.warn(`Controller ${index + 1}:`, message));
           }
           if (updateFailed && !accessoryUpdateFailed) {
             this.log.error(
@@ -307,6 +318,7 @@ export class AdvantageAirPlatform implements DynamicPlatformPlugin {
           poller,
           message => this.log.warn(name, message),
           accessoryName => this.log.info(name, 'Created accessory:', accessoryName),
+          layout.type,
         );
         updateManagers.unshift(state => switchManager.update(state));
 
@@ -327,7 +339,7 @@ export class AdvantageAirPlatform implements DynamicPlatformPlugin {
 
         const percentageManager = new PercentageZoneManager(this.api, this.accessories, poller,
           message => this.log.warn(name, message),
-          accessoryName => this.log.info(name, 'Created accessory:', accessoryName));
+          accessoryName => this.log.info(name, 'Created accessory:', accessoryName), layout.type);
         updateManagers.push(state => percentageManager.update(state));
 
         const myZoneManager = new MyZoneManager(this.api, this.accessories, poller,

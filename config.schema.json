@@ -68,6 +68,19 @@
                 "type": "string",
                 "pattern": "^[a-zA-Z0-9_-]{1,64}$"
               }
+            },
+            "zoneControlType": {
+              "title": "Zone Control Type",
+              "description": "Choose Switches, Lights or Fans for zone controls in Apple Home. Switch / Light keeps the existing layout. Sensorless zones also have a damper-opening slider. Save and restart the child bridge (or Homebridge) to apply layout changes.",
+              "type": "string",
+              "enum": ["switch-light", "lights", "fans"],
+              "default": "switch-light"
+            },
+            "linkZoneTemperatures": {
+              "title": "Link Zone Temperatures",
+              "description": "For zones with supported temperature sensors, show readings within the corresponding zone controls instead of separate temperature accessories. Off by default; independent of Zone Control Type. Changing either Zone setting may remove affected Apple Home scenes or automation actions.",
+              "type": "boolean",
+              "default": false
             }
           }
         }
@@ -93,17 +106,33 @@
       "title": "{{ value.homeName || 'Controller' }}",
       "items": [
         {
-          "key": "devices[].name",
-          "type": "hidden",
-          "htmlClass": "d-none"
-        },
-        "devices[].homeName",
-        "devices[].ipAddress",
-        {
-          "key": "devices[].port",
-          "type": "number"
-        },
-        "devices[].debug"
+          "type": "section",
+          "items": [
+            {
+              "key": "devices[].name",
+              "type": "hidden",
+              "htmlClass": "d-none"
+            },
+            "devices[].homeName",
+            "devices[].ipAddress",
+            {
+              "key": "devices[].port",
+              "type": "number"
+            },
+            {
+              "key": "devices[].zoneControlType",
+              "type": "select",
+              "options": { "required": true },
+              "titleMap": [
+                { "value": "switch-light", "name": "Switch / Light" },
+                { "value": "lights", "name": "Lights" },
+                { "value": "fans", "name": "Fans" }
+              ]
+            },
+            "devices[].linkZoneTemperatures",
+            "devices[].debug"
+          ]
+        }
       ]
     },
     {

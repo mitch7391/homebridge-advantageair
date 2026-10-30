@@ -1,5 +1,6 @@
 import type { API, CharacteristicValue, PlatformAccessory, Service } from 'homebridge';
 import { ZoneCommandError } from '../api/zoneCommand.js';
+import { zoneControlService, type ZoneControlType } from './zoneLayout.js';
 
 export interface ZoneSwitchOptions {
   getOn: () => boolean;
@@ -8,6 +9,7 @@ export interface ZoneSwitchOptions {
   warn: (message: string) => void;
 }
 
+/** Sensor-equipped zone On/Off control; presentation never adds a writable opening percentage. */
 export class ZoneSwitchAccessory {
   private readonly service: Service;
 
@@ -15,10 +17,10 @@ export class ZoneSwitchAccessory {
     private readonly api: API,
     private readonly accessory: PlatformAccessory,
     private readonly options: ZoneSwitchOptions,
+    type: ZoneControlType = 'switch-light',
   ) {
-    const { Service, Characteristic } = api.hap;
-    this.service = accessory.getService(Service.Switch)
-      ?? accessory.addService(Service.Switch, accessory.displayName);
+    const { Characteristic } = api.hap;
+    this.service = zoneControlService(api, accessory, type, false);
     this.service.getCharacteristic(Characteristic.On)
       .onGet(() => {
         try {

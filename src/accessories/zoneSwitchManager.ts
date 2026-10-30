@@ -8,6 +8,7 @@ import { discoverDevices } from '../discovery/discoverDevices.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from '../settings.js';
 import { ZoneSwitchAccessory } from './zoneSwitchAccessory.js';
 import { DuplicateControllerError } from './zoneTemperatureManager.js';
+import { cachedZoneControlType, type ZoneControlType } from './zoneLayout.js';
 
 export class ZoneSwitchManager {
   private static readonly owners = new WeakMap<API, Map<string, ZoneSwitchManager>>();
@@ -21,6 +22,7 @@ export class ZoneSwitchManager {
     private readonly coordinator: Pick<ControllerCoordinator, 'readZone' | 'requestZone' | 'stop'>,
     private readonly warn: (message: string) => void,
     private readonly onCreated?: (name: string) => void,
+    private readonly controlType: ZoneControlType = 'switch-light',
   ) {}
 
   static prepareCachedAccessory(api: API, accessory: PlatformAccessory): void {
@@ -34,7 +36,7 @@ export class ZoneSwitchManager {
       getOn: unavailable,
       setOn: unavailable,
       warn: () => undefined,
-    }).update();
+    }, cachedZoneControlType(accessory)).update();
   }
 
   update(state: ControllerPollState): void {
@@ -105,11 +107,13 @@ export class ZoneSwitchManager {
           getOn: () => this.read(device.identity),
           setOn: on => this.coordinator.requestZone(device.identity, on),
           warn: this.warn,
-        });
+        }, this.controlType);
         const metadataChanged = updateAccessoryInformation(this.api, accessory, data.system.sysType);
         const needsMarker = accessory.context.advantageAirZoneSwitch !== true;
+        const layoutChanged = cachedZoneControlType(accessory) !== this.controlType;
         accessory.context.advantageAirZoneSwitch = true;
-        if (cached && (needsMarker || metadataChanged)) {
+        accessory.context.advantageAirZoneControlType = this.controlType;
+        if (cached && (needsMarker || metadataChanged || layoutChanged)) {
           this.api.updatePlatformAccessories([accessory]);
         }
         if (!cached) {

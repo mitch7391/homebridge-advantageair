@@ -9,6 +9,7 @@ import { PLATFORM_NAME, PLUGIN_NAME } from '../settings.js';
 import {
   ZoneTemperatureAccessory,
 } from './zoneTemperatureAccessory.js';
+import { cachedZoneControlType, reconcileLinkedTemperature, zoneControlService } from './zoneLayout.js';
 
 interface TemperatureBinding {
   handler: ZoneTemperatureAccessory;
@@ -25,7 +26,7 @@ export class ZoneTemperatureManager {
   private readonly bindings = new Map<string, TemperatureBinding>();
 
   static prepareCachedAccessory(api: API, accessory: PlatformAccessory): void {
-    if (accessory.context.advantageAirTemperature !== true) {
+    if (accessory.context.advantageAirTemperature !== true && accessory.context.advantageAirLinkedTemperature !== true) {
       return;
     }
 
@@ -45,6 +46,7 @@ export class ZoneTemperatureManager {
     private readonly accessories: Map<string, PlatformAccessory>,
     private readonly onCreated?: (name: string) => void,
     private readonly owner: object = {},
+    private readonly linkTemperatures = false,
   ) {}
 
   update(state: ControllerPollState): void {
@@ -101,24 +103,46 @@ export class ZoneTemperatureManager {
           'temperature',
         ]));
 
+        const cachedAccessory = this.accessories.get(uuid);
+        const controlId = this.api.hap.uuid.generate(JSON.stringify([device.identity, 'zone-switch']));
+        const control = this.accessories.get(controlId);
+        const ownedControl = control?.context.advantageAirZoneSwitch === true ? control : undefined;
+        // Controls are reconciled first. Never remove a separate sensor until its linked host is available.
+        if (this.linkTemperatures && !ownedControl) {
+          continue;
+        }
+        const linkedChanged = this.linkTemperatures && reconcileLinkedTemperature(
+          this.api, ownedControl!, zoneControlService(this.api, ownedControl!, cachedZoneControlType(ownedControl!), false),
+        );
         const existingBinding = this.bindings.get(uuid);
-
         if (existingBinding) {
-          const accessory = this.accessories.get(uuid);
+          const accessory = this.linkTemperatures ? ownedControl : cachedAccessory;
           if (accessory) {
             updateAccessoryInformation(this.api, accessory, state.data.system.sysType, true);
+            if (linkedChanged) {
+              this.api.updatePlatformAccessories([accessory]);
+            }
           }
           existingBinding.airconKey = device.airconKey;
           existingBinding.zoneKey = device.zoneKey;
           existingBinding.present = true;
           continue;
         }
+        const accessory = this.linkTemperatures
+          ? ownedControl!
+          : cachedAccessory ?? new this.api.platformAccessory(`${device.name} Temperature`, uuid);
 
-        const cachedAccessory = this.accessories.get(uuid);
-        const accessory = cachedAccessory ?? new this.api.platformAccessory(
-          `${device.name} Temperature`,
-          uuid,
-        );
+        if (!this.linkTemperatures && ownedControl?.context.advantageAirLinkedTemperature === true) {
+          const sensor = ownedControl.getService(this.api.hap.Service.TemperatureSensor);
+          if (sensor) {
+            for (const service of ownedControl.services) {
+              service.removeLinkedService(sensor);
+            }
+            ownedControl.removeService(sensor);
+          }
+          delete ownedControl.context.advantageAirLinkedTemperature;
+          this.api.updatePlatformAccessories([ownedControl]);
+        }
 
         // This mutable address lets restored handlers follow addressing
         // changes without changing the accessory's stable UUID.
@@ -141,14 +165,24 @@ export class ZoneTemperatureManager {
         });
 
         const metadataChanged = updateAccessoryInformation(this.api, accessory, state.data.system.sysType);
-        const needsMarker = accessory.context.advantageAirTemperature !== true;
-        accessory.context.advantageAirTemperature = true;
+        const marker = this.linkTemperatures ? 'advantageAirLinkedTemperature' : 'advantageAirTemperature';
+        const needsMarker = accessory.context[marker] !== true;
+        accessory.context[marker] = true;
 
-        if (cachedAccessory && (needsMarker || metadataChanged)) {
+        if (this.linkTemperatures) {
+          const service = zoneControlService(this.api, accessory, cachedZoneControlType(accessory), false);
+          service.setPrimaryService(true);
+          service.addLinkedService(accessory.getService(this.api.hap.Service.TemperatureSensor)!);
+          this.api.updatePlatformAccessories([accessory]);
+          if (cachedAccessory?.context.advantageAirTemperature === true) {
+            this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [cachedAccessory]);
+            this.accessories.delete(uuid);
+          }
+        } else if (cachedAccessory && (needsMarker || metadataChanged)) {
           this.api.updatePlatformAccessories([accessory]);
         }
 
-        if (!cachedAccessory) {
+        if (!this.linkTemperatures && !cachedAccessory) {
           this.api.registerPlatformAccessories(
             PLUGIN_NAME,
             PLATFORM_NAME,
@@ -164,7 +198,7 @@ export class ZoneTemperatureManager {
         });
 
         this.bindings.set(uuid, binding);
-        if (!cachedAccessory) {
+        if (!this.linkTemperatures && !cachedAccessory) {
           try {
             this.onCreated?.(accessory.displayName);
           } catch {

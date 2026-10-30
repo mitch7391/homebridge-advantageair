@@ -1,6 +1,7 @@
 import type { API, Characteristic, PlatformAccessory } from 'homebridge';
 import { ZoneCommandError } from '../api/zoneCommand.js';
 import { normalizeZonePercentage } from '../api/zonePercentage.js';
+import { zoneControlService, type ZoneControlType } from './zoneLayout.js';
 
 export interface PercentageZoneOptions {
   getOn: () => boolean;
@@ -13,11 +14,12 @@ export interface PercentageZoneOptions {
 export class PercentageZoneAccessory {
   private readonly readings: Array<[Characteristic, () => boolean | number]>;
 
-  constructor(private readonly api: API, accessory: PlatformAccessory, options: PercentageZoneOptions) {
-    const { Service, Characteristic, Perms } = api.hap;
-    const service = accessory.getService(Service.Lightbulb) ?? accessory.addService(Service.Lightbulb, accessory.displayName);
+  constructor(private readonly api: API, accessory: PlatformAccessory, options: PercentageZoneOptions,
+    type: ZoneControlType = 'switch-light') {
+    const { Characteristic, Perms } = api.hap;
+    const service = zoneControlService(api, accessory, type, true);
     const on = service.getCharacteristic(Characteristic.On);
-    const brightness = service.getCharacteristic(Characteristic.Brightness);
+    const percentageControl = service.getCharacteristic(type === 'fans' ? Characteristic.RotationSpeed : Characteristic.Brightness);
     const readOn = () => {
       const value = options.getOn();
       if (typeof value !== 'boolean') {
@@ -32,7 +34,7 @@ export class PercentageZoneAccessory {
       }
       return value;
     };
-    this.readings = [[on, readOn], [brightness, readPercentage]];
+    this.readings = [[on, readOn], [percentageControl, readPercentage]];
     for (const [characteristic, read] of this.readings) {
       characteristic.setProps({ perms: [...new Set([...characteristic.props.perms, Perms.WRITE_RESPONSE])] })
         .onGet(() => {
@@ -64,7 +66,7 @@ export class PercentageZoneAccessory {
       }
     });
     // Round here, rather than letting HAP step-round a small positive value to zero.
-    brightness.setProps({ minValue: 0, maxValue: 100, minStep: 1 }).onSet(value => {
+    percentageControl.setProps({ minValue: 0, maxValue: 100, minStep: 1 }).onSet(value => {
       if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 100) {
         throw new api.hap.HapStatusError(api.hap.HAPStatus.INVALID_VALUE_IN_REQUEST);
       }

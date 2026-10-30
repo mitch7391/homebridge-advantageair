@@ -1,14 +1,73 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import { URL } from 'node:url';
 import test from 'node:test';
 
 import { AdvantageAirClient } from '../../dist/api/advantageAirClient.js';
 import { PLATFORM_NAME } from '../../dist/settings.js';
+import { zoneLayout } from '../../dist/accessories/zoneLayout.js';
 
 const config = JSON.parse(fs.readFileSync(new URL('../../config.schema.json', import.meta.url), 'utf8'));
 const properties = config.schema.properties;
 const controller = properties.devices.items;
+const controllerFields = config.layout[1].items[0].items;
+
+test('zone layouts are independent per-controller choices with Beta 2 defaults', () => {
+  const type = controller.properties.zoneControlType;
+  const link = controller.properties.linkZoneTemperatures;
+  assert.deepEqual(type.enum, ['switch-light', 'lights', 'fans']);
+  assert.equal(type.default, 'switch-light');
+  assert.equal(type.title, 'Zone Control Type');
+  assert.equal(link.type, 'boolean');
+  assert.equal(link.default, false);
+  assert.equal(link.title, 'Link Zone Temperatures');
+  assert.equal(controller.required.includes('zoneControlType'), false);
+  assert.equal(controller.required.includes('linkZoneTemperatures'), false);
+  assert.match(type.description, /damper-opening/);
+  assert.match(link.description, /supported temperature sensors/);
+});
+
+test('form-only selection requirement excludes None without invalidating omitted legacy settings', () => {
+  const select = controllerFields.find(item => item.key === 'devices[].zoneControlType');
+  // ng-formworks select passes options.required to buildTitleMap, which otherwise adds null/None.
+  assert.deepEqual(select.options, { required: true });
+  assert.deepEqual(select.titleMap.map(item => item.value), controller.properties.zoneControlType.enum);
+  assert.deepEqual(select.titleMap.map(item => item.name), ['Switch / Light', 'Lights', 'Fans']);
+  const require = createRequire(import.meta.url);
+  const Ajv = require('ajv');
+  const validate = new Ajv().compile(config.schema);
+  const configFor = device => ({ name: 'Advantage Air', devices: [{ ipAddress: '192.0.2.1', ...device }] });
+  const omitted = configFor({});
+  assert.equal(validate(omitted), true);
+  assert.equal(Object.hasOwn(omitted.devices[0], 'zoneControlType'), false);
+  assert.deepEqual(zoneLayout(omitted.devices[0]), { type: 'switch-light', linkTemperatures: false });
+  for (const type of ['switch-light', 'lights', 'fans']) {
+    for (const linked of [true, false]) {
+      const device = { zoneControlType: type, linkZoneTemperatures: linked };
+      assert.equal(validate(configFor(device)), true);
+      assert.deepEqual(zoneLayout(device), { type, linkTemperatures: linked });
+    }
+  }
+  for (const type of [null, '', 'None', 'thermostat']) {
+    assert.equal(validate(configFor({ zoneControlType: type })), false);
+    assert.throws(() => zoneLayout({ zoneControlType: type }));
+  }
+});
+
+test('zone warning stays in the linking description and the single controller section', () => {
+  const tabs = config.layout[1];
+  assert.equal(tabs.items.length, 1);
+  assert.equal(tabs.items[0].type, 'section');
+  assert.equal(controllerFields.some(item => item.type === 'help'), false);
+  const warning = 'Changing either Zone setting may remove affected Apple Home scenes or automation actions.';
+  assert.equal(controller.properties.linkZoneTemperatures.description,
+    'For zones with supported temperature sensors, show readings within the corresponding zone controls ' +
+    'instead of separate temperature accessories. Off by default; independent of Zone Control Type. ' + warning);
+  assert.equal(JSON.stringify(config).split(warning).length - 1, 1);
+  assert.equal(controllerFields[controllerFields.indexOf('devices[].linkZoneTemperatures') + 1], 'devices[].debug');
+  assert.match(controller.properties.zoneControlType.description, /Save and restart the child bridge/);
+});
 
 test('native schema exposes controller setup without legacy or Homebridge-owned bridge settings', () => {
   assert.equal(config.pluginAlias, PLATFORM_NAME);
@@ -17,7 +76,9 @@ test('native schema exposes controller setup without legacy or Homebridge-owned 
   assert.equal(config.strictValidation, false);
   assert.equal(config.customUi, undefined);
   assert.deepEqual(Object.keys(properties).sort(), ['debug', 'devices', 'name']);
-  assert.deepEqual(Object.keys(controller.properties).sort(), ['debug', 'excludedLightIds', 'homeName', 'ipAddress', 'name', 'port']);
+  assert.deepEqual(Object.keys(controller.properties).sort(), [
+    'debug', 'excludedLightIds', 'homeName', 'ipAddress', 'linkZoneTemperatures', 'name', 'port', 'zoneControlType',
+  ]);
   assert.deepEqual(controller.required, ['ipAddress']);
   assert.equal(properties.devices.minItems, 1);
 });
@@ -54,9 +115,13 @@ test('standard layout hides retained labels, uses controller tabs and a numeric 
   const tabs = config.layout[1];
   assert.equal(tabs.type, 'tabarray');
   assert.equal(tabs.key, 'devices');
-  assert.deepEqual(tabs.items, [
+  assert.deepEqual(controllerFields, [
     { key: 'devices[].name', type: 'hidden', htmlClass: 'd-none' }, 'devices[].homeName', 'devices[].ipAddress',
-    { key: 'devices[].port', type: 'number' }, 'devices[].debug',
+    { key: 'devices[].port', type: 'number' },
+    { key: 'devices[].zoneControlType', type: 'select', options: { required: true }, titleMap: [
+      { value: 'switch-light', name: 'Switch / Light' }, { value: 'lights', name: 'Lights' }, { value: 'fans', name: 'Fans' },
+    ] },
+    'devices[].linkZoneTemperatures', 'devices[].debug',
   ]);
   assert.equal(tabs.title, '{{ value.homeName || \'Controller\' }}');
   assert.deepEqual(config.layout[2], { type: 'fieldset', notitle: true,

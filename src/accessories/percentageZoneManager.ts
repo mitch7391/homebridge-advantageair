@@ -6,6 +6,7 @@ import { ZoneCommandError } from '../api/zoneCommand.js';
 import { discoverDevices } from '../discovery/discoverDevices.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from '../settings.js';
 import { PercentageZoneAccessory } from './percentageZoneAccessory.js';
+import { cachedZoneControlType, type ZoneControlType } from './zoneLayout.js';
 
 export class PercentageZoneManager {
   private readonly handlers = new Map<string, PercentageZoneAccessory>();
@@ -19,6 +20,7 @@ export class PercentageZoneManager {
       'readPercentageZoneState' | 'requestPercentageZoneState' | 'readZonePercentage' | 'requestZonePercentage'>,
     private readonly warn: (message: string) => void,
     private readonly onCreated: (name: string) => void,
+    private readonly controlType: ZoneControlType = 'switch-light',
   ) {}
 
   static prepareCachedAccessory(api: API, accessory: PlatformAccessory): void {
@@ -30,7 +32,7 @@ export class PercentageZoneManager {
     };
     new PercentageZoneAccessory(api, accessory, {
       getOn: unavailable, setOn: unavailable, getPercentage: unavailable, setPercentage: unavailable, warn: () => undefined,
-    }).update();
+    }, cachedZoneControlType(accessory)).update();
   }
 
   update(state: ControllerPollState): void {
@@ -92,11 +94,13 @@ export class PercentageZoneManager {
       getPercentage: () => use(() => this.coordinator.readZonePercentage(identity)),
       setPercentage: value => use(() => this.coordinator.requestZonePercentage(identity, value)),
       warn: this.warn,
-    });
+    }, this.controlType);
     const metadataChanged = updateAccessoryInformation(this.api, accessory, sysType);
     const needsMarker = accessory.context.advantageAirPercentageZone !== true;
+    const layoutChanged = cachedZoneControlType(accessory) !== this.controlType;
     accessory.context.advantageAirPercentageZone = true;
-    if (cached && (needsMarker || metadataChanged)) {
+    accessory.context.advantageAirZoneControlType = this.controlType;
+    if (cached && (needsMarker || metadataChanged || layoutChanged)) {
       this.api.updatePlatformAccessories([accessory]);
     }
     if (!cached) {
