@@ -48,7 +48,7 @@ legacy setup.
 - Check whether you use v3 features absent from native v4, such as MyPlace
   Things, light groups/scenes or mode-specific legacy timers.
   Individual MyPlace lights are supported. See the zone layout options below
-  from Beta 3; Beta 2 retains its original fixed layout. Install only an announced release.
+  for native presentation choices. Install only an announced release.
   These are not automatically replaced.
 
 ## Transition
@@ -83,10 +83,10 @@ the legacy backend.
 
 <a id="zone-layout-options-development-not-included-in-published-beta-2"></a>
 
-## Zone layout options (introduced in Beta 3; not included in Beta 2)
+## Zone Layout Options
 
 In each controller's plugin settings, **Zone Control Type** selects the zone
-presentation. The default, **Switch / Light**, preserves Beta 2's layout.
+presentation. The default, **Switch / Light**, preserves the existing presentation.
 
 | Zone Control Type | Temperature-controlled zone | Sensorless percentage-controlled zone |
 | --- | --- | --- |
@@ -114,8 +114,11 @@ Save and restart Homebridge or the child bridge to apply a change. Layout change
 wait for a valid response identifying the affected zones. An outage or failed
 sensor does not request a different layout.
 
-**Back up Homebridge and record affected scenes and automations before changing
-an existing layout.** Default upgrades retain the existing accessory identities
+**Back up Homebridge and record affected Apple Home scenes and automations with
+screenshots or notes before changing an existing layout.** A Homebridge backup
+protects Homebridge configuration and pairing/storage data; it does not back up
+or guarantee restoration of Apple Home room assignments, scenes or automations.
+Default upgrades retain the existing accessory identities
 and services. Changing control type or temperature linking can remove affected
 scene and automation actions. In e-zone testing, control-type changes cleared or
 removed affected automation actions, deleted zone-only scenes, and removed zone

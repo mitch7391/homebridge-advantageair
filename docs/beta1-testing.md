@@ -124,8 +124,7 @@ controller overrides with model/firmware and readback, not guessed guarantees.
 
 ## Zone layout hardware acceptance — 26 October 2026
 
-Configurable zone layouts are introduced in Beta 3 and are not included
-in Beta 2. Install only after the maintainer announces the release. See the [configuration and migration guidance](v3-migration.md#zone-layout-options-development-not-included-in-published-beta-2)
+Install only a version announced by the maintainer. See the [configuration and migration guidance](v3-migration.md#zone-layout-options-development-not-included-in-published-beta-2)
 for Switch / Light, Lights, Fans and optional **Link Zone Temperatures**. Defaults
 retain the existing layout. Save settings and restart the Advantage Air child
 bridge (or Homebridge if not using a child bridge) to apply a deliberate change.

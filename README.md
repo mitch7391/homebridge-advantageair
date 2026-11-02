@@ -64,8 +64,6 @@ Automatically discovers individual MyPlace lights:
 
 #### Optional Zone Layouts
 
-*Introduced in Beta 3; not included in Beta 2. Install only a version announced by the maintainer.*
-
 Choose how zones appear in Apple Home using **Zone Control Type** in each controller's Homebridge plugin settings:
 
 | Layout | Zones with temperature sensors | Sensorless percentage zones |
@@ -81,7 +79,9 @@ Enable **Link Zone Temperatures** to show readings from supported zone temperatu
 Save settings and restart the Advantage Air child bridge (or Homebridge if not using a child bridge). Existing configurations keep **Switch / Light** with separate temperatures; no layout change is required.
 
 > [!WARNING]
-> Back up Homebridge before changing zone control types or temperature linking. Affected scene and automation actions can be removed; scenes containing only affected zones may be deleted. You may need to recreate them. Zone accessory identities are retained without removing or re-pairing accessories. Room assignments were retained in e-zone hardware testing, and a scene and automation survived an unchanged restart. See the [layout and migration guidance](docs/v3-migration.md#zone-layout-options-development-not-included-in-published-beta-2) and [hardware evidence and limitations](docs/beta1-testing.md#zone-layout-hardware-acceptance--26-october-2026).
+> Before changing zone control types or temperature linking, record affected Apple Home scenes and automations with screenshots or notes. Changes can remove affected scene and automation actions; scenes containing only affected zones may be deleted. Switching back does not automatically restore them.
+>
+> Back up Homebridge to protect its configuration and pairing/storage data. This does not back up or guarantee restoration of Apple Home room assignments, scenes or automations. Accessory identities, pairing and rooms were preserved in the documented physical e-zone tests, but cannot be guaranteed for every installation. See the [layout and migration guidance](docs/v3-migration.md#zone-layout-options-development-not-included-in-published-beta-2) and [hardware evidence and limitations](docs/beta1-testing.md#zone-layout-hardware-acceptance--26-october-2026).
 
 ### Additional Controls
 
