@@ -1,7 +1,7 @@
 # Native v4 beta: opt-in installation and hardware feedback
 
 This guide covers installation and hardware feedback for native v4 betas, including
-4.0.0-beta.2. A version in this guide is not a publication announcement.
+the 4.0.0-beta.3 release candidate. A version in this guide is not a publication announcement.
 Check the maintainer's release announcement for the currently available version.
 Stable v3 is homebridge-cmd4-advantageair@latest; native v4 is a separate
 homebridge-advantageair package. At Beta 1 publication, its beta and latest npm
@@ -28,7 +28,7 @@ Do not install an unbuilt GitHub branch.
 ## Install deliberately — Homebridge web UI
 
 Add **homebridge-advantageair**, selecting the precise announced version
-(for example, 4.0.0-beta.2 only once its release is announced). Do not select the v3 package's update action.
+(for example, 4.0.0-beta.3 only once its release is announced). Do not select the v3 package's update action.
 Homebridge plugin search has been verified to discover the standalone package.
 Search by exact package name and check the selected version before installing;
 alternate-version selection allows an explicit version. Do not change registry
@@ -36,16 +36,16 @@ tags to troubleshoot installation.
 
 If the UI cannot select the new package, use your host's supported npm install
 workflow with an explicit announced version, such as
-homebridge-advantageair@4.0.0-beta.2 once announced. For a
+homebridge-advantageair@4.0.0-beta.3 once announced. For a
 standard global npm-managed Homebridge installation only, the command below
 targets that same prefix. UI/container/local-prefix installations must use their
 documented package-management route; do not mix locations or add sudo blindly.
 
 **Run in the Homebridge host terminal, only for the global npm-managed case,
-after backup and only after Beta 2 publication is announced:**
+after backup and only after Beta 3 publication is announced:**
 
 ```sh
-npm install -g homebridge-advantageair@4.0.0-beta.2
+npm install -g homebridge-advantageair@4.0.0-beta.3
 ```
 
 Both latest and beta can move after separate release approval. Normal updates
@@ -124,8 +124,7 @@ controller overrides with model/firmware and readback, not guessed guarantees.
 
 ## Zone layout hardware acceptance — 26 October 2026
 
-Configurable zone layouts are in development for an upcoming beta, not included
-in published Beta 2. See the [configuration and migration guidance](v3-migration.md#zone-layout-options-development-not-included-in-published-beta-2)
+Install only a version announced by the maintainer. See the [configuration and migration guidance](v3-migration.md#zone-layout-options-development-not-included-in-published-beta-2)
 for Switch / Light, Lights, Fans and optional **Link Zone Temperatures**. Defaults
 retain the existing layout. Save settings and restart the Advantage Air child
 bridge (or Homebridge if not using a child bridge) to apply a deliberate change.

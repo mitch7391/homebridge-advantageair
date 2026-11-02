@@ -30,7 +30,7 @@ test('standalone registration and schema retain the native platform under the ne
   assert.equal(pkg.name, PLUGIN_NAME);
   assert.equal(JSON.parse(fs.readFileSync(new URL('config.schema.json', root))).pluginAlias, PLATFORM_NAME);
   assertBetaPackage(pkg); // Supports the separately reviewed publication state too.
-  assert.equal(pkg.version, '4.0.0-beta.2');
+  assert.equal(pkg.version, '4.0.0-beta.3');
   assert.equal(pkg.dependencies, undefined);
   assert.equal(pkg.files.includes('AdvAir.sh'), false);
   const lock = JSON.parse(fs.readFileSync(new URL('package-lock.json', root)));

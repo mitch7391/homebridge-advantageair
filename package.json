@@ -2,7 +2,7 @@
   "name": "homebridge-advantageair",
   "displayName": "Homebridge Advantage Air",
   "type": "module",
-  "version": "4.0.0-beta.2",
+  "version": "4.0.0-beta.3",
   "private": false,
   "description": "Public beta: native Advantage Air AC and MyPlace lights. Review beta guidance before installation.",
   "author": "mitch7391",
