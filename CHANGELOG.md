@@ -1,4 +1,28 @@
-## 4.0.0-beta.2 — unreleased candidate
+## 4.0.0-beta.3 — unreleased candidate
+
+- Improve controller command reliability with separate 60-second queue waiting,
+  10-second preflight and 30-second write/confirmation budgets. Preserve serial
+  execution, FIFO ordering, supersession and single-write safety; reconcile
+  ambiguous delivery through readback without blindly retrying writes (PR #151).
+- Bound compound MyZone operations separately and handle definite rejections
+  without unnecessarily cancelling unrelated queued work.
+- Add per-controller Switch / Light (default), Lights and Fans zone layouts,
+  plus optional linked temperatures for sensor-equipped zones. Sensorless
+  Brightness/Rotation Speed controls continue to represent damper opening (PR #152).
+- Reconcile linked temperature service identities only when necessary, retain
+  zone accessory identities, and report actual migrations with sanitised logs.
+  Correct the settings UI while preserving optional settings and existing defaults.
+- **Back up Homebridge and record scenes and automations before changing layouts
+  or temperature linking.** Affected actions may be removed and zone-only scenes
+  deleted even when pairing and rooms are retained. Switching back does not restore them.
+- Physical e-zone testing covered rapid zone commands, fan confirmation and
+  selected layout/linking transitions, settings Save, migration logs and unchanged
+  restarts. MyZone and MyPlace lighting acceptance used simulators with Apple Home;
+  broader controller, firmware and physical lighting qualification remains open.
+- This is an unpublished release candidate. Install only after the maintainer's
+  announcement; see [installation, backup and feedback guidance](docs/beta1-testing.md).
+
+## 4.0.0-beta.2 (2026-10-21) — public beta / GitHub prerelease
 
 - Remove the unwanted MyPlace light exclusion editor from the visible Homebridge
   Settings page. Name, IP Address, Port and controller/global Detailed debug

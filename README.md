@@ -64,7 +64,7 @@ Automatically discovers individual MyPlace lights:
 
 #### Optional Zone Layouts
 
-*In development for an upcoming beta; not included in published Beta 2.*
+*Introduced in Beta 3; not included in Beta 2. Install only a version announced by the maintainer.*
 
 Choose how zones appear in Apple Home using **Zone Control Type** in each controller's Homebridge plugin settings:
 

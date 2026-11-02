@@ -48,7 +48,7 @@ legacy setup.
 - Check whether you use v3 features absent from native v4, such as MyPlace
   Things, light groups/scenes or mode-specific legacy timers.
   Individual MyPlace lights are supported. See the zone layout options below
-  for development builds; published Beta 2 retains its original fixed layout.
+  from Beta 3; Beta 2 retains its original fixed layout. Install only an announced release.
   These are not automatically replaced.
 
 ## Transition
@@ -81,7 +81,9 @@ Both accessory sets may remain paired temporarily; inactive accessories can
 show unavailable. No cache clearing or re-pairing is required merely to retain
 the legacy backend.
 
-## Zone layout options (development; not included in published Beta 2)
+<a id="zone-layout-options-development-not-included-in-published-beta-2"></a>
+
+## Zone layout options (introduced in Beta 3; not included in Beta 2)
 
 In each controller's plugin settings, **Zone Control Type** selects the zone
 presentation. The default, **Switch / Light**, preserves Beta 2's layout.
