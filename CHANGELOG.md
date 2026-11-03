@@ -1,4 +1,4 @@
-## 4.0.0-beta.3 — unreleased candidate
+## 4.0.0-beta.3
 
 - Improve controller command reliability with separate 60-second queue waiting,
   10-second preflight and 30-second write/confirmation budgets. Preserve serial
@@ -19,8 +19,7 @@
   selected layout/linking transitions, settings Save, migration logs and unchanged
   restarts. MyZone and MyPlace lighting acceptance used simulators with Apple Home;
   broader controller, firmware and physical lighting qualification remains open.
-- This is an unpublished release candidate. Install only after the maintainer's
-  announcement; see [installation, backup and feedback guidance](docs/beta1-testing.md).
+- Install only after the maintainer's announcement; see [installation, backup and feedback guidance](docs/beta1-testing.md).
 
 ## 4.0.0-beta.2 (2026-10-21) — public beta / GitHub prerelease
 
