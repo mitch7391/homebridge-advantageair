@@ -15,14 +15,13 @@
 
 ## Introducing native Advantage Air v4
 
-Meet `homebridge-advantageair@4.0.0-beta.2`, the publicly available standalone
-native v4 beta with no Cmd4 required. Read the migration guidance before installing.
+Meet `homebridge-advantageair`, the separate standalone native v4 Homebridge
+plugin, with no Cmd4 required.
 
-Existing v3 installations remain supported, and migration is optional. Updating
-this legacy package will not install v4 or migrate your accessories. Some legacy
-features, including garage doors and gates, are not yet available in v4. Read the
-[v4 migration guide and beta limitations](https://github.com/mitch7391/homebridge-advantageair/blob/master/docs/v3-migration.md)
-before changing your setup.
+Existing v3 installations can continue operating. Updating this legacy package
+does not install v4 or migrate accessories; migration is optional and manual.
+Consult the [native v4 migration guide](https://github.com/mitch7391/homebridge-advantageair/blob/master/docs/v3-migration.md)
+for current compatibility, feature support and limitations before changing your setup.
 
 # homebridge-cmd4-AdvantageAir
 

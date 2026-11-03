@@ -1,4 +1,5 @@
 "use strict";
+const chalk = require("chalk");
 
 // The optional platform constructor is not called by Cmd4-only configurations.
 const announcementKey = Symbol.for("homebridge-cmd4-advantageair.v4-announcement");
@@ -28,11 +29,11 @@ module.exports =
            stopped = true;
            api.removeListener("shutdown", shutdown);
            // Homebridge supplies no public logger to the plugin initialiser.
-           console.info("[AdvantageAir] A new native Advantage Air v4 beta is available!");
-           console.info("[AdvantageAir] Try homebridge-advantageair@4.0.0-beta.2 (no Cmd4 required).");
-           console.info("[AdvantageAir] Your existing v3 setup will continue working; migration is optional.");
-           console.info("[AdvantageAir] Some legacy features are not yet supported. Read the migration guide: " +
-             "https://github.com/mitch7391/homebridge-advantageair/blob/master/docs/v3-migration.md");
+           console.info(chalk.blueBright("[AdvantageAir] Native Advantage Air v4 is available as a separate Homebridge plugin!"));
+           console.info(chalk.blueBright("[AdvantageAir] Package: homebridge-advantageair"));
+           console.info(chalk.blueBright("[AdvantageAir] Your existing v3 setup is unaffected; migration is optional and manual."));
+           console.info(chalk.blueBright("[AdvantageAir] Compatibility and migration guide: " +
+             "https://github.com/mitch7391/homebridge-advantageair/blob/master/docs/v3-migration.md"));
          }, 30000);
          timer.unref();
        };

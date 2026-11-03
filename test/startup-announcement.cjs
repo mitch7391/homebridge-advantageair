@@ -6,15 +6,17 @@ const path = require('node:path');
 const test = require('node:test');
 const root = path.resolve(__dirname, '..');
 const expected = [
-  '[AdvantageAir] A new native Advantage Air v4 beta is available!',
-  '[AdvantageAir] Try homebridge-advantageair@4.0.0-beta.2 (no Cmd4 required).',
-  '[AdvantageAir] Your existing v3 setup will continue working; migration is optional.',
-  '[AdvantageAir] Some legacy features are not yet supported. Read the migration guide: ' +
+  '[AdvantageAir] Native Advantage Air v4 is available as a separate Homebridge plugin!',
+  '[AdvantageAir] Package: homebridge-advantageair',
+  '[AdvantageAir] Your existing v3 setup is unaffected; migration is optional and manual.',
+  '[AdvantageAir] Compatibility and migration guide: ' +
     'https://github.com/mitch7391/homebridge-advantageair/blob/master/docs/v3-migration.md',
 ];
-function run(code) {
+function run(code, colour = '0') {
+  const env = { ...process.env, FORCE_COLOR: colour };
+  delete env.NO_COLOR;
   const result = spawnSync(process.execPath, ['--input-type=module', '-e', code], {
-    cwd: root, encoding: 'utf8', env: process.env, timeout: 15000,
+    cwd: root, encoding: 'utf8', env, timeout: 15000,
   });
   assert.equal(result.status, 0, result.error?.message || result.stderr);
   return result.stdout;
@@ -141,11 +143,25 @@ test('separate processes each receive one group of four consistently prefixed li
   }
 });
 
+test('Bright Blue formats only the announcement and preserves plain text without colour', () => {
+  for (const colour of ['0', '1']) {
+    run(setup + clock + `
+      console.info('Unrelated before');
+      initialise(); api.emit('didFinishLaunching'); tick(30000);
+      console.info('Unrelated after');
+      const esc = String.fromCharCode(27);
+      const formatted = expected.map(message => ${colour === '1'}
+        ? esc + '[94m' + message + esc + '[39m' : message);
+      assert.deepEqual(messages, ['Unrelated before', ...formatted, 'Unrelated after']);
+    `, colour);
+  }
+});
+
 test('legacy package and lock versions remain consistent', () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json')));
   const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json')));
   assert.equal(manifest.name, 'homebridge-cmd4-advantageair');
-  assert.equal(manifest.version, '3.12.3');
+  assert.equal(manifest.version, '3.12.4');
   assert.equal(lock.version, manifest.version);
   assert.equal(lock.packages[''].version, manifest.version);
   assert.deepEqual(lock.packages[''].dependencies, manifest.dependencies);
