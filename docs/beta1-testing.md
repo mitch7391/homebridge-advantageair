@@ -1,7 +1,7 @@
 # Native v4 beta: opt-in installation and hardware feedback
 
-This guide covers installation and hardware feedback for native v4 betas, including
-the 4.0.0-beta.3 release candidate. A version in this guide is not a publication announcement.
+This guide covers installation and hardware feedback for native v4 betas.
+A version in this guide is not a publication announcement.
 Check the maintainer's release announcement for the currently available version.
 Stable v3 is homebridge-cmd4-advantageair@latest; native v4 is a separate
 homebridge-advantageair package. At Beta 1 publication, its beta and latest npm
