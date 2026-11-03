@@ -2,7 +2,7 @@
 
 This guide describes two independently installed packages: existing v3
 `homebridge-cmd4-advantageair` and native v4 `homebridge-advantageair`.
-Follow [Beta 1 installation and rollback](beta1-testing.md) when installing a
+Follow [Beta installation and rollback](beta1-testing.md) when installing a
 version announced by the maintainer; do not substitute an unbuilt GitHub branch.
 
 ## What remains with v3
@@ -46,8 +46,9 @@ legacy setup.
 - Know how to stop/disable the Advantage Air entries or their dedicated Cmd4
   bridge. Do not disable unrelated Cmd4 accessories unnecessarily.
 - Check whether you use v3 features absent from native v4, such as MyPlace
-  Things, light groups/scenes, mode-specific legacy timers or alternative zone
-  layouts. Individual MyPlace lights are supported.
+  Things, light groups/scenes or mode-specific legacy timers.
+  Individual MyPlace lights are supported. See the zone layout options below
+  for native presentation choices. Install only an announced release.
   These are not automatically replaced.
 
 ## Transition
@@ -79,6 +80,63 @@ Home setup manually. There is no automatic transfer of rooms or automations.
 Both accessory sets may remain paired temporarily; inactive accessories can
 show unavailable. No cache clearing or re-pairing is required merely to retain
 the legacy backend.
+
+<a id="zone-layout-options-development-not-included-in-published-beta-2"></a>
+
+## Zone Layout Options
+
+In each controller's plugin settings, **Zone Control Type** selects the zone
+presentation. The default, **Switch / Light**, preserves the existing presentation.
+
+| Zone Control Type | Temperature-controlled zone | Sensorless percentage-controlled zone |
+| --- | --- | --- |
+| Switch / Light | Switch: On/Off | Lightbulb: On/Off and Brightness |
+| Lights | Lightbulb: On/Off only | Lightbulb: On/Off and Brightness |
+| Fans | Fan: On/Off only | Fan: On/Off and Rotation Speed |
+
+For sensorless zones, Brightness or Rotation Speed represents damper opening,
+not lighting or AC fan speed. Opening values retain the existing 5% normalisation;
+zero closes the zone without writing a zero opening value. Sensor-controlled
+zones do not expose an opening slider. Controller rules and MyZone protection
+are unchanged.
+
+**Link Zone Temperatures** is independent of the control type and
+defaults to off. Off keeps separate temperature accessories. On places each
+temperature sensor within its corresponding sensor-equipped zone control and
+removes the separate copy after valid controller discovery. Sensorless zones
+do not gain temperature sensors. Apple Home decides how linked services appear
+in its interface.
+
+JSON settings are `zoneControlType` (`switch-light`, `lights` or `fans`) and
+`linkZoneTemperatures` (boolean) on each `devices` entry. They apply to every AC
+reported by that configured controller; there are no per-AC or per-zone overrides.
+Save and restart Homebridge or the child bridge to apply a change. Layout changes
+wait for a valid response identifying the affected zones. An outage or failed
+sensor does not request a different layout.
+
+**Back up Homebridge and record affected Apple Home scenes and automations with
+screenshots or notes before changing an existing layout.** A Homebridge backup
+protects Homebridge configuration and pairing/storage data; it does not back up
+or guarantee restoration of Apple Home room assignments, scenes or automations.
+Default upgrades retain the existing accessory identities
+and services. Changing control type or temperature linking can remove affected
+scene and automation actions. In e-zone testing, control-type changes cleared or
+removed affected automation actions, deleted zone-only scenes, and removed zone
+actions from mixed scenes. Recreate affected scenes and automations as needed;
+switching back does not automatically restore them.
+
+Native zone accessory UUIDs are retained. Room assignments and pairing were
+preserved during the physically tested linked Switches → Lights → Fans sequence.
+A scene and automation also survived an unchanged child-bridge restart. These
+results do not establish every controller or transition; see the
+[hardware acceptance record](beta1-testing.md#zone-layout-hardware-acceptance--26-october-2026).
+Do not clear the whole accessory cache or remove/re-pair the bridge for this change.
+Restoring a v3-like layout does not transfer Cmd4 accessory identities or rooms.
+Native v4 and legacy v3 remain separate plugins, and v3 migration is optional.
+
+The grouped MyZone switches, main thermostat, Ventilation/Dry Fans and native
+countdown Timer keep their existing presentation. RotationDirection-based MyZone
+selection and legacy mode timers are not restored by these settings.
 
 ## Temporary overlap and Timer precautions
 

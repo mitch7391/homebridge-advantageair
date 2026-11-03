@@ -1,11 +1,12 @@
-# Beta 1: opt-in installation and hardware feedback
+# Native v4 beta: opt-in installation and hardware feedback
 
-This guide covers installation and hardware feedback for 4.0.0-beta.1.
+This guide covers installation and hardware feedback for native v4 betas.
+A version in this guide is not a publication announcement.
 Check the maintainer's release announcement for the currently available version.
 Stable v3 is homebridge-cmd4-advantageair@latest; native v4 is a separate
-homebridge-advantageair package. Its beta and latest npm tags currently both
-identify 4.0.0-beta.1, as set during initial publication; no separate latest
-promotion command was executed. Latest is the default installation tag, not a
+homebridge-advantageair package. At Beta 1 publication, its beta and latest npm
+tags both identified 4.0.0-beta.1; no separate latest-promotion command was
+executed. Tags can change with later releases. Latest is the default installation tag, not a
 guarantee of stability. This software
 is under active development; bugs and incomplete hardware qualification remain.
 Do not install an unbuilt GitHub branch.
@@ -26,24 +27,25 @@ Do not install an unbuilt GitHub branch.
 
 ## Install deliberately — Homebridge web UI
 
-Add **homebridge-advantageair**, selecting exactly 4.0.0-beta.1
-(or the precise announced version). Do not select the v3 package's update action.
+Add **homebridge-advantageair**, selecting the precise announced version
+(for example, 4.0.0-beta.3 only once its release is announced). Do not select the v3 package's update action.
 Homebridge plugin search has been verified to discover the standalone package.
 Search by exact package name and check the selected version before installing;
 alternate-version selection allows an explicit version. Do not change registry
 tags to troubleshoot installation.
 
 If the UI cannot select the new package, use your host's supported npm install
-workflow with the explicit specifier homebridge-advantageair@4.0.0-beta.1. For a
+workflow with an explicit announced version, such as
+homebridge-advantageair@4.0.0-beta.3 once announced. For a
 standard global npm-managed Homebridge installation only, the command below
 targets that same prefix. UI/container/local-prefix installations must use their
 documented package-management route; do not mix locations or add sudo blindly.
 
 **Run in the Homebridge host terminal, only for the global npm-managed case,
-after backup:**
+after backup and only after Beta 3 publication is announced:**
 
 ```sh
-npm install -g homebridge-advantageair@4.0.0-beta.1
+npm install -g homebridge-advantageair@4.0.0-beta.3
 ```
 
 Both latest and beta can move after separate release approval. Normal updates
@@ -119,6 +121,45 @@ installer settings. Any minimum-airflow verification needs installer/manufacture
 confirmation or a qualified supervised procedure; do not deliberately close all
 outlets on a running system to test this beta. Report existing observations of
 controller overrides with model/firmware and readback, not guessed guarantees.
+
+## Zone layout hardware acceptance — 26 October 2026
+
+Install only a version announced by the maintainer. See the [configuration and migration guidance](v3-migration.md#zone-layout-options-development-not-included-in-published-beta-2)
+for Switch / Light, Lights, Fans and optional **Link Zone Temperatures**. Defaults
+retain the existing layout. Save settings and restart the Advantage Air child
+bridge (or Homebridge if not using a child bridge) to apply a deliberate change.
+
+The maintainer tested the conditional temperature-subtype reconciliation candidate
+on a Raspberry Pi with Homebridge 2.4.0, Node.js 24.22.0 and a real e-zone controller
+with six temperature-equipped zones, retaining pairing and cached accessories:
+
+- Enabling linked temperatures with Switch controls passed as a baseline check.
+- Switches → Lights and Lights → Fans passed with temperatures kept linked
+  throughout. After each normal child-bridge restart, Apple Home showed the
+  selected controls, working single-tap On/Off and accessible temperatures.
+  Original room assignments were retained.
+- A scene and automation created for the current layout survived an additional
+  restart with no layout or temperature-linking change.
+
+**Observed limitation:** deliberate control-type changes removed or cleared
+affected automation actions, deleted scenes containing only affected zones, and
+removed affected zone actions from mixed scenes. Layout or temperature-linking
+changes can change HomeKit service identities even though zone accessory UUIDs
+remain stable. Record scenes and automations beforehand and expect to recreate
+affected ones; neither the plugin nor a switch back repairs them automatically.
+
+An earlier already-paired disposable HomeKit experiment independently confirmed
+temperature-service identity repair, corrected Fan quick-toggle presentation,
+retained pairing/room assignment and stable identifiers on a subsequent restart.
+It is separate evidence from the actual plugin settings-UI trial above.
+
+**Additional acceptance — 29 October 2026:** Subsequent maintainer testing on Homebridge 2.4.0 / Node 24 with the real e-zone controller confirmed deliberate Switches → Fans → Switches transitions. Disabling temperature linking when returning to Switches restored all six separate temperature accessories. Pairing, accessory identities and room assignments were preserved.
+
+The corrected single-controller settings form displayed populated values, supported an unchanged Save and presented the compact migration warning correctly. Controller-indexed logs accurately reported layout changes, temperature reconciliation and HomeKit identity warnings.
+
+**Remaining hardware qualification:** Not all six directed layout transitions, other controller models, percentage-controlled real hardware or every scene/automation combination have been physically tested. Automated tests provide broader coverage of layouts, accessory identities, sensor faults and recovery, but do not replace hardware acceptance.
+
+These options do not add individual zone thermostats or alter controller airflow safeguards. Do not deliberately induce hardware faults or unsafe airflow to test layouts.
 
 ## Reporting
 

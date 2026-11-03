@@ -62,6 +62,27 @@ Automatically discovers individual MyPlace lights:
   <img src="https://raw.githubusercontent.com/mitch7391/homebridge-advantageair/master/assets/zone-percentage-control.png" alt="Adjustable percentage zone in Apple Home" height="610">
 </p>
 
+#### Optional Zone Layouts
+
+Choose how zones appear in Apple Home using **Zone Control Type** in each controller's Homebridge plugin settings:
+
+| Layout | Zones with temperature sensors | Sensorless percentage zones |
+| --- | --- | --- |
+| Switch / Light (default) | Switch: On/Off | Lightbulb: On/Off and Brightness |
+| Lights | Lightbulb: On/Off | Lightbulb: On/Off and Brightness |
+| Fans | Fan: On/Off | Fan: On/Off and Rotation Speed |
+
+For zones without temperature sensors, the **Brightness** or **Rotation Speed** slider adjusts how far the zone damper opens (0-100%). These Apple Home controls represent damper position rather than actual light brightness or air conditioner fan speed.
+
+Enable **Link Zone Temperatures** to show readings from supported zone temperature sensors within their corresponding controls instead of separate temperature accessories. This works independently of the chosen layout and is off by default. Sensorless zones do not gain temperature sensors, and sensor-equipped controls do not gain damper-opening sliders.
+
+Save settings and restart the Advantage Air child bridge (or Homebridge if not using a child bridge). Existing configurations keep **Switch / Light** with separate temperatures; no layout change is required.
+
+> [!WARNING]
+> Before changing zone control types or temperature linking, record affected Apple Home scenes and automations with screenshots or notes. Changes can remove affected scene and automation actions; scenes containing only affected zones may be deleted. Switching back does not automatically restore them.
+>
+> Back up Homebridge to protect its configuration and pairing/storage data. This does not back up or guarantee restoration of Apple Home room assignments, scenes or automations. Accessory identities, pairing and rooms were preserved in the documented physical e-zone tests, but cannot be guaranteed for every installation. See the [layout and migration guidance](docs/v3-migration.md#zone-layout-options-development-not-included-in-published-beta-2) and [hardware evidence and limitations](docs/beta1-testing.md#zone-layout-hardware-acceptance--26-october-2026).
+
 ### Additional Controls
 
 *Grouped MyZone selection and the native countdown timer.*
