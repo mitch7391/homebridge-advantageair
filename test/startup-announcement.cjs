@@ -12,6 +12,7 @@ const expected = [
   '[AdvantageAir] Compatibility and migration guide: ' +
     'https://github.com/mitch7391/homebridge-advantageair/blob/master/docs/v3-migration.md',
 ];
+const formatted = expected.map(message => '\u001b[94m' + message + '\u001b[39m');
 function run(code, colour = '0') {
   const env = { ...process.env, FORCE_COLOR: colour };
   delete env.NO_COLOR;
@@ -26,7 +27,7 @@ const setup = `
   import { createRequire } from 'node:module';
   import { EventEmitter } from 'node:events';
   const require = createRequire(process.cwd() + '/package.json');
-  const expected = ${JSON.stringify(expected)};
+  const expected = ${JSON.stringify(formatted)};
   const messages = [];
   console.info = message => messages.push(message);
   const api = new EventEmitter();
@@ -139,20 +140,26 @@ test('separate processes each receive one group of four consistently prefixed li
       assert.deepEqual(messages, expected);
       for (const message of messages) console.log(message);
     `);
-    assert.deepEqual(output.trim().split(/\r?\n/), expected);
+    assert.deepEqual(output.trim().split(/\r?\n/), formatted);
   }
 });
 
-test('Bright Blue formats only the announcement and preserves plain text without colour', () => {
+test('private Bright Blue notice ignores detection without changing shared Chalk or unrelated logs', () => {
   for (const colour of ['0', '1']) {
     run(setup + clock + `
+      const sharedChalk = require('chalk');
+      const originalLevel = sharedChalk.level;
+      const unrelated = sharedChalk.green('Other plugin output');
       console.info('Unrelated before');
       initialise(); api.emit('didFinishLaunching'); tick(30000);
       console.info('Unrelated after');
+      assert.equal(sharedChalk.level, originalLevel);
+      assert.equal(sharedChalk.green('Other plugin output'), unrelated);
+      assert.deepEqual(messages, ['Unrelated before', ...expected, 'Unrelated after']);
       const esc = String.fromCharCode(27);
-      const formatted = expected.map(message => ${colour === '1'}
-        ? esc + '[94m' + message + esc + '[39m' : message);
-      assert.deepEqual(messages, ['Unrelated before', ...formatted, 'Unrelated after']);
+      const plain = messages.slice(1, 5).map(message =>
+        message.replaceAll(esc + '[94m', '').replaceAll(esc + '[39m', ''));
+      assert.deepEqual(plain, ${JSON.stringify(expected)});
     `, colour);
   }
 });
@@ -200,7 +207,7 @@ test('actual Homebridge loader registers without constructing platform; launch a
       assert.deepEqual(messages, []);
       if (${shutdown}) api.signalShutdown();
       tick(1);
-      assert.deepEqual(messages, ${shutdown ? '[]' : JSON.stringify(expected)});
+      assert.deepEqual(messages, ${shutdown ? '[]' : JSON.stringify(formatted)});
       assert.equal(timers.size, 0);
       assert.equal(api.listenerCount('didFinishLaunching'), 0);
       assert.equal(api.listenerCount('shutdown'), 0);

@@ -23,6 +23,11 @@ does not install v4 or migrate accessories; migration is optional and manual.
 Consult the [native v4 migration guide](https://github.com/mitch7391/homebridge-advantageair/blob/master/docs/v3-migration.md)
 for current compatibility, feature support and limitations before changing your setup.
 
+The startup notice appears once per Homebridge process, 30 seconds after startup.
+A dedicated `cmd4AdvantageAir` child bridge can also emit the notice, including
+after a child-bridge restart. Its four messages use Bright Blue ANSI formatting;
+log viewers without ANSI support may show escape codes. Other logging is unchanged.
+
 # homebridge-cmd4-AdvantageAir
 
 Catered shell script to integrate air conditioner control units by Advantage Air into Homekit using the plug-in [homebridge-cmd4](https://github.com/ztalbot2000/homebridge-cmd4). 

@@ -1,5 +1,6 @@
 "use strict";
-const chalk = require("chalk");
+// Private instance: colour only this notice, including service-mode output.
+const chalk = new (require("chalk").Instance)({ level: 1 });
 
 // The optional platform constructor is not called by Cmd4-only configurations.
 const announcementKey = Symbol.for("homebridge-cmd4-advantageair.v4-announcement");

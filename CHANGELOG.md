@@ -6,8 +6,10 @@ All notable changes to this project will be documented in this file. This projec
 
 * Make the native v4 startup announcement and README introduction evergreen,
   directing users to current compatibility and migration guidance.
-* Render the four startup messages in Bright Blue when terminal colour support
-  is available, with unchanged plain-text content otherwise.
+* Render the four startup messages in Bright Blue using a private Chalk instance,
+  including when Homebridge runs as a service. ANSI-unaware log consumers may
+  display escape codes. Other logging is unaffected.
+* Retain the notice once per process; a dedicated child bridge can also emit it.
 * Legacy plugin functionality is unchanged; native v4 remains a separate plugin
   and migration is optional and manual.
 
