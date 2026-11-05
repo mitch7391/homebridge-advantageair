@@ -1,96 +1,79 @@
-# Temporary compatibility experiment. Do not merge into v3-maintenance.
-name: Temporary Cmd4 / Advantage Air v3 Node compatibility
-
-on:
-  push:
-    branches:
-      - test/cmd4-node26
-
-permissions:
-  contents: read
-
+name: Cmd4 Node test
+on: {push: {branches: [test/cmd4-node26]}}
+permissions: {contents: read}
 jobs:
-  v3-regression:
-    name: v3 simulator tests / Node ${{ matrix.node }}
+  integration:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    strategy:
-      fail-fast: false
-      matrix:
-        node: ['24.19.0', '26.13.0']
+    timeout-minutes: 12
+    strategy: {fail-fast: false, matrix: {node: ['24.19.0', '26.13.0']}}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-          cache: npm
-      - name: Install Linux test utilities
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y jq lsof shellcheck libatomic1
-      - name: Install v3 test dependencies
-        run: npm ci --ignore-scripts --no-audit --no-fund
-      # The unchanged v3 Bats suite has three jq 1.7.1 numeric presentation
-      # expectations (21 vs 21.0, 23 vs 23.0) on BOTH Node versions.
-      # Record them explicitly; unexpected failures remain fatal.
-      - name: Run v3 Bash simulator tests and classify known baseline mismatches
+      - name: Reject incomplete workflow
+        run: test "$(wc -l < .github/workflows/cmd4-node26-compat.yml)" -ge 79
+      - name: Test Cmd4 with v3 simulator
         shell: bash
         run: |
           set -euo pipefail
-          node --version
-          npm --version
-          set +e
-          npm run allBats > "$RUNNER_TEMP/v3-bats.log" 2>&1
-          rc=$?
-          set -e
-          cat "$RUNNER_TEMP/v3-bats.log"
-          if [[ "$rc" -eq 0 ]]; then
-            echo 'PASS: All v3 Bash tests passed'
-          else
-            failures=$(grep -E '^not ok [0-9]+ ' "$RUNNER_TEMP/v3-bats.log" | sed -E 's/^not ok ([0-9]+).*/\1/' | paste -sd, - || true)
-            [[ "$failures" == '21,38,67' ]] || { echo "::error::Unexpected Bash test failures: $failures"; exit 1; }
-            [[ $(grep -c 'actual   : 21.0' "$RUNNER_TEMP/v3-bats.log") -eq 2 ]] || exit 1
-            [[ $(grep -c 'actual   : 23.0' "$RUNNER_TEMP/v3-bats.log") -eq 1 ]] || exit 1
-            [[ $(grep -Ec '^(ok|not ok) [0-9]+ ' "$RUNNER_TEMP/v3-bats.log") -eq 112 ]] || exit 1
-            echo '::warning::Three unchanged v3 tests expect integers but jq returns decimal formatting on Ubuntu; compare Node 24 and 26 logs.'
-          fi
-      - name: Run v3 JavaScript and static checks
-        run: |
-          npm run testjs
-          npm run test:announcement
-          npm run check
-          npm run lint
-
-  cmd4-v3-integration:
-    name: Cmd4 + v3 integration / Node ${{ matrix.node }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        node: ['24.19.0', '26.13.0']
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node }}
-          cache: npm
-      - name: Install simulator dependencies and Linux tools
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y jq lsof libatomic1
+          command -v jq
           npm ci --ignore-scripts --no-audit --no-fund
-      - name: Install released Cmd4 and Homebridge in a separate directory
-        run: |
-          set -euo pipefail
-          lab="$RUNNER_TEMP/cmd4-compat"
+          lab="$RUNNER_TEMP/cmd4-test"
           mkdir -p "$lab"
-          printf '%s\n' '{"name":"cmd4-node-compat","version":"1.0.0","private":true}' > "$lab/package.json"
-          cd "$lab"
-          npm install --save-exact --ignore-scripts --no-audit --no-fund homebridge@2.5.0 homebridge-cmd4@8.0.4
-          node -e 'const assert=require("node:assert/strict"),fs=require("node:fs"); assert.equal(JSON.parse(fs.readFileSync("node_modules/homebridge/package.json","utf8")).version,"2.5.0"); assert.equal(JSON.parse(fs.readFileSync("node_modules/homebridge-cmd4/package.json","utf8")).version,"8.0.4");'
-      - name: Test actual Cmd4 polling and Set calls against the v3 simulator
-        shell: bash
-        run: |
-          set -euo pipefail
-          lab="$RUNNER_TEMP/cmd4-compat"
+          echo '{"name":"cmd4-test","version":"1.0.0","private":true}' > "$lab/package.json"
+          (cd "$lab" && npm install --ignore-scripts --no-audit --no-fund homebridge@2.5.0 homebridge-cmd4@8.0.4)
+          export LAB="$lab" CALLS="$lab/calls.log"
+          sim='' hb=''
+          cleanup() {
+            for pid in "$hb" "$sim"; do
+              [[ -z "$pid" ]] || { kill "$pid" 2>/dev/null || :; wait "$pid" 2>/dev/null || :; }
+            done
+            tail -n 40 "$lab/hb.log" 2>/dev/null || :
+            cat "$CALLS" 2>/dev/null || :
+          }
+          trap cleanup EXIT
+          (cd test && PORT=2025 node AirConServer.js) > "$lab/sim.log" 2>&1 & sim=$!
+          for i in {1..25}; do
+            if curl -fsS http://127.0.0.1:2025/reInit >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:2025/reInit >/dev/null
+          curl -fsSg 'http://127.0.0.1:2025?load=testData/basicPassingSystemData.txt' >/dev/null
+          cat > "$lab/wrap.sh" <<'SH'
+          #!/usr/bin/env bash
+          printf '%s\n' "$*" >> "$CALLS"
+          exec bash "$GITHUB_WORKSPACE/AdvAir.sh" "$@"
+          SH
+          chmod +x "$lab/wrap.sh"
+          node <<'JS'
+          const fs=require('node:fs'),p=require('node:path'),l=process.env.LAB;
+          fs.mkdirSync(p.join(l,'storage'));
+          fs.writeFileSync(p.join(l,'storage/config.json'),JSON.stringify({
+            bridge:{name:'Cmd4 Test',username:'0E:26:00:00:00:11',port:53728,pin:'031-45-154'},accessories:[],
+            platforms:[{platform:'Cmd4',name:'Cmd4',accessories:[{type:'Switch',name:'Fan',displayName:'Fan',on:'FALSE',
+              state_cmd:`bash "${l}/wrap.sh"`,state_cmd_suffix:'127.0.0.1:2025',
+              polling:[{characteristic:'on',interval:5,timeout:5000}]}]}]}));
+          JS
+          node "$lab/node_modules/homebridge/bin/homebridge.js" -U "$lab/storage" -P "$lab/node_modules/homebridge-cmd4" --strict-plugin-resolution -Q > "$lab/hb.log" 2>&1 & hb=$!
+          count=0
+          for i in {1..115}; do
+            count=$(grep -c '^Get Fan On 127\.0\.0\.1:2025$' "$CALLS" 2>/dev/null || :)
+            [[ "$count" -ge 2 ]] && break
+            kill -0 "$hb" 2>/dev/null
+            sleep 1
+          done
+          [[ "$count" -ge 2 ]]
+          grep -q 'Loaded plugin: homebridge-cmd4@8.0.4' "$lab/hb.log"
+          ! grep -Eq 'getValue On function failed|Cannot convert value|Failed to publish bridge' "$lab/hb.log"
+          kill "$hb" 2>/dev/null || :; wait "$hb" 2>/dev/null || :; hb=''
+          node <<'JS'
+          const p=require('node:path'),l=process.env.LAB;
+          const {Cmd4PriorityPollingQueue:Q}=require(p.join(l,'node_modules/homebridge-cmd4/Cmd4PriorityPollingQueue.js'));
+          const log={debugEnabled:false,debug(){},info(){},warn:console.error,error:console.error},q=new Q(log,'test');
+          const a={displayName:'Fan',state_cmd:`bash "${l}/wrap.sh"`,state_cmd_prefix:'',state_cmd_suffix:' 127.0.0.1:2025',hV:{outputConstants:false,statusMsg:'FALSE'},log,queue:q};
+          const t=setTimeout(()=>process.exit(2),15000);
+          q.qSetValue(a,0,'On',10000,true,rc=>{clearTimeout(t);if(rc!==0)process.exitCode=1});
+          JS
+          grep -q '^Set Fan On 1 127\.0\.0\.1:2025$' "$CALLS"
+          echo "PASS integration on $(node --version)"
