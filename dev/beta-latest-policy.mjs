@@ -30,12 +30,16 @@ export function assertLatestPromotion(manifest, document, legacy, env, phase) {
   assert.equal(published.name, manifest.name);
   assert.equal(published.version, manifest.version);
   assert.equal(published.private, false);
-  assert.equal(published.gitHead, env.AA_BETA_RELEASE_COMMIT);
+  assert.ok(Object.hasOwn(published, 'gitHead'),
+    'Published gitHead is missing; source attribution is unverified. Stop: no approved archive-to-source fallback exists.');
+  assert.equal(typeof published.gitHead, 'string', 'Published gitHead must be a commit SHA.');
+  assert.match(published.gitHead, /^[0-9a-f]{40}$/, 'Published gitHead must be a full commit SHA.');
+  assert.equal(published.gitHead, env.AA_BETA_RELEASE_COMMIT, 'Published gitHead differs from the approved source.');
   assert.equal(published.dist?.integrity, env.AA_BETA_RELEASE_INTEGRITY);
   assert.equal(published.dist?.tarball, `${registry}${manifest.name}/-/${manifest.name}-${manifest.version}.tgz`);
   assert.equal(document['dist-tags']?.beta, manifest.version, 'Verify beta before promoting latest.');
   assert.equal(legacy.name, 'homebridge-cmd4-advantageair');
-  assert.deepEqual(legacy['dist-tags'], { latest: '3.12.2', beta: '3.6.0-beta.2' }, 'V3 registry state changed; stop for review.');
+  assert.deepEqual(legacy['dist-tags'], { latest: '3.12.4', beta: '3.6.0-beta.2' }, 'V3 registry state changed; stop for review.');
   const previous = env.AA_BETA_PREVIOUS_LATEST;
   assert.equal(typeof previous, 'string', 'Record previous latest, or none for first release.');
   if (previous !== 'none') {

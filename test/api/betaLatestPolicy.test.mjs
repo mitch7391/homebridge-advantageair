@@ -14,7 +14,7 @@ function fixture(version = '4.0.0-beta.1', previous = 'none') {
       versions: { [version]: { name, version, private: false, gitHead: commit,
         dist: { integrity, tarball: `${registry}${name}/-/${name}-${version}.tgz` } } },
     },
-    legacy: { name: 'homebridge-cmd4-advantageair', 'dist-tags': { latest: '3.12.2', beta: '3.6.0-beta.2' } },
+    legacy: { name: 'homebridge-cmd4-advantageair', 'dist-tags': { latest: '3.12.4', beta: '3.6.0-beta.2' } },
     env: { AA_BETA_RELEASE_PACKAGE: name, AA_BETA_RELEASE_VERSION: version, AA_BETA_LATEST_APPROVAL: version,
       AA_BETA_RELEASE_COMMIT: commit, AA_BETA_RELEASE_INTEGRITY: integrity, AA_BETA_PREVIOUS_LATEST: previous,
       npm_config_registry: registry },
@@ -103,4 +103,55 @@ test('foreign packages, changed v3, missing version, metadata and tag races stop
   }
   assert.throws(() => check(fixture(), 'after'));
   assert.throws(() => check(fixture(), 'publish'));
+});
+
+
+test('matching full gitHead passes; absent, malformed or mismatched source attribution fails closed', () => {
+  check(fixture());
+  for (const value of [undefined, null, '', 'a'.repeat(39), 'A'.repeat(40), 'b'.repeat(40)]) {
+    const f = fixture();
+    f.document.versions[f.manifest.version].gitHead = value;
+    assert.throws(() => check(f));
+  }
+  const f = fixture();
+  delete f.document.versions[f.manifest.version].gitHead;
+  // Unchecked assertions, even with matching registry integrity, are not source evidence.
+  f.env.AA_BETA_SOURCE_VERIFIED = 'true';
+  f.document.versions[f.manifest.version].sourceEvidence = {
+    commit: f.env.AA_BETA_RELEASE_COMMIT, integrity: f.env.AA_BETA_RELEASE_INTEGRITY,
+  };
+  const before = globalThis.structuredClone(f);
+  assert.throws(() => check(f), /source attribution is unverified/);
+  assert.deepEqual(f, before);
+});
+
+test('current complete legacy snapshot passes; stale, extra and missing legacy tags fail', () => {
+  check(fixture());
+  for (const tags of [
+    { latest: '3.12.2', beta: '3.6.0-beta.2' },
+    { latest: '3.12.3', beta: '3.6.0-beta.2' },
+    { latest: '3.12.4' },
+    { latest: '3.12.4', beta: '3.6.0-beta.2', next: '3.12.4' },
+  ]) {
+    const f = fixture();
+    f.legacy['dist-tags'] = tags;
+    const before = globalThis.structuredClone(f);
+    assert.throws(() => check(f));
+    assert.deepEqual(f, before);
+  }
+});
+
+test('exact published package identity and integrity remain mandatory', () => {
+  for (const field of ['name', 'version']) {
+    const f = fixture();
+    f.document.versions[f.manifest.version][field] = 'wrong';
+    assert.throws(() => check(f));
+  }
+  for (const value of [undefined, '', 'sha512-' + 'B'.repeat(86) + '==']) {
+    const f = fixture();
+    f.document.versions[f.manifest.version].dist.integrity = value;
+    const before = globalThis.structuredClone(f);
+    assert.throws(() => check(f));
+    assert.deepEqual(f, before);
+  }
 });
