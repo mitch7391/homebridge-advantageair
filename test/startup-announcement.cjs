@@ -6,15 +6,18 @@ const path = require('node:path');
 const test = require('node:test');
 const root = path.resolve(__dirname, '..');
 const expected = [
-  '[AdvantageAir] A new native Advantage Air v4 beta is available!',
-  '[AdvantageAir] Try homebridge-advantageair@4.0.0-beta.2 (no Cmd4 required).',
-  '[AdvantageAir] Your existing v3 setup will continue working; migration is optional.',
-  '[AdvantageAir] Some legacy features are not yet supported. Read the migration guide: ' +
+  '[AdvantageAir] Native Advantage Air v4 is available as a separate Homebridge plugin!',
+  '[AdvantageAir] Package: homebridge-advantageair',
+  '[AdvantageAir] Your existing v3 setup is unaffected; migration is optional and manual.',
+  '[AdvantageAir] Compatibility and migration guide: ' +
     'https://github.com/mitch7391/homebridge-advantageair/blob/master/docs/v3-migration.md',
 ];
-function run(code) {
+const formatted = expected.map(message => '\u001b[94m' + message + '\u001b[39m');
+function run(code, colour = '0') {
+  const env = { ...process.env, FORCE_COLOR: colour };
+  delete env.NO_COLOR;
   const result = spawnSync(process.execPath, ['--input-type=module', '-e', code], {
-    cwd: root, encoding: 'utf8', env: process.env, timeout: 15000,
+    cwd: root, encoding: 'utf8', env, timeout: 15000,
   });
   assert.equal(result.status, 0, result.error?.message || result.stderr);
   return result.stdout;
@@ -24,7 +27,7 @@ const setup = `
   import { createRequire } from 'node:module';
   import { EventEmitter } from 'node:events';
   const require = createRequire(process.cwd() + '/package.json');
-  const expected = ${JSON.stringify(expected)};
+  const expected = ${JSON.stringify(formatted)};
   const messages = [];
   console.info = message => messages.push(message);
   const api = new EventEmitter();
@@ -137,7 +140,27 @@ test('separate processes each receive one group of four consistently prefixed li
       assert.deepEqual(messages, expected);
       for (const message of messages) console.log(message);
     `);
-    assert.deepEqual(output.trim().split(/\r?\n/), expected);
+    assert.deepEqual(output.trim().split(/\r?\n/), formatted);
+  }
+});
+
+test('private Bright Blue notice ignores detection without changing shared Chalk or unrelated logs', () => {
+  for (const colour of ['0', '1']) {
+    run(setup + clock + `
+      const sharedChalk = require('chalk');
+      const originalLevel = sharedChalk.level;
+      const unrelated = sharedChalk.green('Other plugin output');
+      console.info('Unrelated before');
+      initialise(); api.emit('didFinishLaunching'); tick(30000);
+      console.info('Unrelated after');
+      assert.equal(sharedChalk.level, originalLevel);
+      assert.equal(sharedChalk.green('Other plugin output'), unrelated);
+      assert.deepEqual(messages, ['Unrelated before', ...expected, 'Unrelated after']);
+      const esc = String.fromCharCode(27);
+      const plain = messages.slice(1, 5).map(message =>
+        message.replaceAll(esc + '[94m', '').replaceAll(esc + '[39m', ''));
+      assert.deepEqual(plain, ${JSON.stringify(expected)});
+    `, colour);
   }
 });
 
@@ -145,7 +168,7 @@ test('legacy package and lock versions remain consistent', () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json')));
   const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json')));
   assert.equal(manifest.name, 'homebridge-cmd4-advantageair');
-  assert.equal(manifest.version, '3.12.3');
+  assert.equal(manifest.version, '3.12.4');
   assert.equal(lock.version, manifest.version);
   assert.equal(lock.packages[''].version, manifest.version);
   assert.deepEqual(lock.packages[''].dependencies, manifest.dependencies);
@@ -184,7 +207,7 @@ test('actual Homebridge loader registers without constructing platform; launch a
       assert.deepEqual(messages, []);
       if (${shutdown}) api.signalShutdown();
       tick(1);
-      assert.deepEqual(messages, ${shutdown ? '[]' : JSON.stringify(expected)});
+      assert.deepEqual(messages, ${shutdown ? '[]' : JSON.stringify(formatted)});
       assert.equal(timers.size, 0);
       assert.equal(api.listenerCount('didFinishLaunching'), 0);
       assert.equal(api.listenerCount('shutdown'), 0);

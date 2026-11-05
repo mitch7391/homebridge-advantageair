@@ -2,14 +2,25 @@
 
 All notable changes to this project will be documented in this file. This project uses [Semantic Versioning](https://semver.org/).
 
-## 3.12.3 (Unreleased)
+## 3.12.4 (Unreleased)
+
+* Make the native v4 startup announcement and README introduction evergreen,
+  directing users to current compatibility and migration guidance.
+* Render the four startup messages in Bright Blue using a private Chalk instance,
+  including when Homebridge runs as a service. ANSI-unaware log consumers may
+  display escape codes. Other logging is unaffected.
+* Retain the notice once per process; a dedicated child bridge can also emit it.
+* Legacy plugin functionality is unchanged; native v4 remains a separate plugin
+  and migration is optional and manual.
+
+## 3.12.3 (2026-10-21)
 
 * Add a once-per-Homebridge-process startup notice for the published standalone
   `homebridge-advantageair@4.0.0-beta.2` native v4 beta. Existing v3 configurations,
   accessories and controller behaviour are unchanged; migration is optional,
   not automatic.
 * Update the README and announcement links to the renamed repository and
-  published migration guidance. This v3.12.3 maintenance update remains unreleased.
+  published migration guidance.
 
 ## 3.12.2 (2026-07-22)
 
