@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file. This project uses [Semantic Versioning](https://semver.org/).
 
-## 3.12.4 (Unreleased)
+## 3.12.4 (2026-11-05)
 
 * Make the native v4 startup announcement and README introduction evergreen,
   directing users to current compatibility and migration guidance.
