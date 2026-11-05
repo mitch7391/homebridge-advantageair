@@ -1,0 +1,96 @@
+# Temporary compatibility experiment. Do not merge into v3-maintenance.
+name: Temporary Cmd4 / Advantage Air v3 Node compatibility
+
+on:
+  push:
+    branches:
+      - test/cmd4-node26
+
+permissions:
+  contents: read
+
+jobs:
+  v3-regression:
+    name: v3 simulator tests / Node ${{ matrix.node }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['24.19.0', '26.13.0']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - name: Install Linux test utilities
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y jq lsof shellcheck libatomic1
+      - name: Install v3 test dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run v3 simulated-controller and JavaScript tests
+        run: |
+          node --version
+          npm --version
+          npm run allBats
+          npm run testjs
+          npm run test:announcement
+      - name: Run v3 static checks
+        run: |
+          npm run check
+          npm run lint
+
+  cmd4-v3-integration:
+    name: Cmd4 + v3 integration / Node ${{ matrix.node }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['24.19.0', '26.13.0']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - name: Install simulator dependencies and Linux tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y jq lsof libatomic1
+          npm ci --ignore-scripts --no-audit --no-fund
+      - name: Install released Cmd4 and Homebridge in a separate directory
+        run: |
+          set -euo pipefail
+          lab="$RUNNER_TEMP/cmd4-compat"
+          mkdir -p "$lab"
+          printf '%s\n' '{"name":"cmd4-node-compat","version":"1.0.0","private":true}' > "$lab/package.json"
+          cd "$lab"
+          npm install --save-exact --ignore-scripts --no-audit --no-fund homebridge@2.5.0 homebridge-cmd4@8.0.4
+          node -e 'const assert=require("node:assert/strict"); assert.equal(require("homebridge/package.json").version,"2.5.0"); assert.equal(require("homebridge-cmd4/package.json").version,"8.0.4");'
+      - name: Test actual Cmd4 polling and Set calls against the v3 simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          lab="$RUNNER_TEMP/cmd4-compat"
+          export CMD4_CALL_LOG="$lab/requests.log"
+          export CMD4_TEST_LAB="$lab"
+          sim_pid=''
+          hb_pid=''
+          cleanup() {
+            if [[ -n "$hb_pid" ]]; then kill "$hb_pid" 2>/dev/null || true; wait "$hb_pid" 2>/dev/null || true; fi
+            if [[ -n "$sim_pid" ]]; then kill "$sim_pid" 2>/dev/null || true; wait "$sim_pid" 2>/dev/null || true; fi
+            echo '=== Cmd4 Homebridge log (last 90 lines) ==='
+            tail -n 90 "$lab/homebridge.log" 2>/dev/null || true
+            echo '=== Simulator log (last 25 lines) ==='
+            tail -n 25 "$lab/simulator.log" 2>/dev/null || true
+            echo '=== Cmd4 calls ==='
+            cat "$CMD4_CALL_LOG" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          # Exercise the real v3 AdvAir.sh against only a localhost test controller.
+          (cd "$GITHUB_WORKSPACE/test" && PORT=2025 node AirConServer.js) > "$lab/simulator.log" 2>&1 &
+          sim_pid=$!
