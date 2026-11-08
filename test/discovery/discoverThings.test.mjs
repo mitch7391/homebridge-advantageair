@@ -8,7 +8,8 @@ const snapshot = things => ({ system: { mid: 'synthetic-controller', noOfAircons
 const record = (id, dip, name = 'Synthetic output') => ({ id, name, channelDipState: dip, value: 0 });
 
 test('verified numeric DIP mappings describe capability, never physical subtype or position', () => {
-  for (const [dip, expected] of [[1, 'blind-capable'], [2, 'blind-capable'], [3, 'garage-gate-capable'], [10, 'garage-gate-capable']]) {
+  for (const [dip, expected] of [[1, 'blind-capable'], [2, 'blind-capable'], [3, 'garage-gate-capable'],
+    [10, 'garage-gate-capable'], [8, 'relay-capable']]) {
     const r = discoverThings(snapshot({ t1: record('t1', dip) }));
     assert.equal(r.things[0].capability, expected);
     assert.equal(r.things[0].physicalSubtype, 'undetermined');

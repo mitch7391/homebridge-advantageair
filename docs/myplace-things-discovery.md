@@ -22,7 +22,10 @@ pure function from the existing snapshot update callback without another request
 - The upstream Python client also reads `/getSystemData` and requires an aircons
   key: https://github.com/Bre77/advantage_air/blob/master/advantage_air/__init__.py
 
-Numeric 1/2 are `blind-capable`; numeric 3/10 are `garage-gate-capable`.
+Numeric 1/2 are `blind-capable`; numeric 3/10 are `garage-gate-capable`;
+numeric 8 is `relay-capable`. DIP 8 is supported by Home Assistant's
+[relay switch implementation](https://github.com/home-assistant/core/blob/dev/homeassistant/components/advantage_air/switch.py),
+inspected 8 November 2026. It does not identify the connected load as a fan.
 Everything else is `unknown`, including numeric strings: the inspected evidence
 supports numbers, not string coercion. Physical subtype always remains
 `undetermined`. Names never establish capability. No output means garage versus
@@ -64,13 +67,90 @@ fixture-privacy review is recommended; this work neither reproduces raw values
 nor cleans up historical files. New tests use small synthetic data, plus a
 synthetic 5,000-record collection.
 
+## Increment 2A: explicit configuration and reported endpoints
+
+Optional `devices[].things` settings are available in the standard controller
+form. They are preparation only: nothing is registered, controlled or moved.
+The platform's existing managers and coordinator are unchanged. The pure
+`configureThings(pollState, device.things)` helper in
+`src/discovery/configureThings.ts` is not yet wired into platform callbacks.
+It consumes the existing Increment 1 discovery model, with no additional reads,
+timers, state cache, commands or dependencies.
+
+Example inside one controller entry (synthetic identifiers):
+
+```json
+{
+  "ipAddress": "192.0.2.1",
+  "things": [
+    { "controllerId": "synthetic-controller", "id": "t1", "type": "garage-door", "invert": false },
+    { "controllerId": "synthetic-controller", "id": "t2", "type": "relay-switch" }
+  ]
+}
+```
+
+`controllerId` is the exact nonblank `system.mid` (no surrounding whitespace),
+not an address or display name. `id` follows the discovery ID rules above.
+Matching uses both, so renaming or an IP change cannot retarget a device, and a
+replacement controller with the same Thing IDs does not silently match. Every
+entry within one controller's array must have the same MID. Keep real MIDs and
+controller data private; do not post full configuration or raw responses.
+
+| User-selected `type` | Required reported capability | Interpretation limit |
+| --- | --- | --- |
+| `garage-door` / `gate` | Numeric DIP 3 or 10 | No physical end-position, movement or obstruction proof |
+| `blind` | Numeric DIP 1 or 2 | No continuous position or travel calibration inferred |
+| `relay-switch` | Numeric DIP 8 | No proof of connected load state |
+| `relay-fan` | Numeric DIP 8 and an explicitly identified installed fan | No fan identification from DIP/name, speed or rotation feedback |
+
+The user selects installed hardware; the reported `physicalSubtype` remains
+`undetermined`. A compatible selection is not electrical/safety qualification or
+permission to control it. Unknown hardware and capability/type mismatches remain
+unsupported. Relay fan selection records user knowledge only; its wiring, relay
+mode and safe operation still require hardware evidence before any exposure.
+
+Omitting `things` selects nothing; an empty array also selects nothing. There is
+no default physical type. `invert` is optional and defaults to false. Invalid
+IDs, properties, types or inversion values, repeated IDs (even identical entries),
+and mixed controller MIDs invalidate the entire controller's Things configuration.
+Raw discovery remains available. Schema validation catches field errors; the pure
+helper additionally rejects duplicates and conflicts. Nothing about invalid
+Things settings changes the existing HVAC or lighting configuration.
+
+For a matched compatible observation, only numeric `value: 0` and `value: 100`
+produce a valid interpretation. The result carries `reportedValue`, `logicalValue`
+and `physicalState: "unknown"`. Inversion swaps only logical 0/100; it never
+changes raw data, identities or stored controller values. For example reported
+100 becomes logical 0 with inversion. No HomeKit characteristic value is emitted.
+
+Legacy `AdvAir.sh` used 100/open and 0/closed with a manual `flip` option, and
+wrote these values through `/setThing`. That is evidence of command-state mapping,
+not proof of door position sensors. Its fallback treating other values as an
+endpoint is deliberately not reproduced. Missing values yield `unavailable`;
+malformed values, strings, booleans, null and non-endpoint numbers yield `invalid`.
+Discovery's `valueStatus` distinguishes an omitted value from a rejected
+non-scalar value without retaining malformed payloads. `buttonType` and
+`dimPercent` are retained but cannot establish movement, fan speed, obstruction,
+position or an alternative endpoint.
+
+Results retain configured entries as unavailable when their observations are
+missing/quarantined. Partial discovery can still supply valid peers, while its
+partial status is preserved. Failed coordinator reads reject last-good data.
+The helper uses the existing freshness signal, not an invented age timeout;
+future consumers must use current coordinator snapshots and fault readings on
+shutdown/disconnection, not reuse an old successful result indefinitely.
+No status authorises removal of previously recognised hardware. Configuration
+and interpretation outputs are detached/frozen and are recalculated per snapshot.
+
 ## Next review gate
 
-Confirm supported hardware mappings and sanitised controller response shapes
-before adding any Things accessory lifecycle. Increment 2 should first resolve
-physical subtype/configuration and readback semantics. Movement, inversion and
-writes require separate approval and hardware-specific evidence. This increment
-has no hardware acceptance and does not prepare a new package version.
+Increment 2B should first qualify sanitised hardware readbacks, relay modes,
+physical feedback availability and a read-only lifecycle with stable identities,
+faulting and non-removal tests. Separately decide safe HomeKit presentation where
+only command-state feedback exists. Neither a compatible configuration nor a
+numeric endpoint justifies an operational GarageDoorOpener or blind position.
+Writes and movement require separate approval and hardware-specific evidence.
+This foundation has no physical hardware acceptance or new package version.
 
 ## Inventory completeness contract
 

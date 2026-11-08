@@ -69,6 +69,42 @@
                 "pattern": "^[a-zA-Z0-9_-]{1,64}$"
               }
             },
+            "things": {
+              "title": "MyPlace Things (read-only preparation)",
+              "description": "Optional explicit hardware selections. This increment creates no Home accessories and sends no commands. Leave empty unless the hardware and controller IDs are known. Keep identifiers private.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["controllerId", "id", "type"],
+                "properties": {
+                  "controllerId": {
+                    "title": "Controller MID",
+                    "description": "Exact system.mid for this controller, not its IP address or name. All entries here must belong to this controller.",
+                    "type": "string",
+                    "pattern": "^\\S(?:.*\\S)?$"
+                  },
+                  "id": {
+                    "title": "Thing ID",
+                    "description": "Exact controller Thing ID, not its display name. Enter each ID only once.",
+                    "type": "string",
+                    "pattern": "^[a-zA-Z0-9_-]{1,64}$"
+                  },
+                  "type": {
+                    "title": "Physical device type",
+                    "description": "Select the known installed hardware. Capability matching does not verify physical position, wiring or safe control. Relay fans require a known fan connected to a general relay; no speed control is inferred.",
+                    "type": "string",
+                    "enum": ["garage-door", "gate", "blind", "relay-switch", "relay-fan"]
+                  },
+                  "invert": {
+                    "title": "Invert reported endpoints",
+                    "description": "Swap the interpretation of reported 0 and 100. Does not alter controller values or establish physical position.",
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            },
             "zoneControlType": {
               "title": "Zone Control Type",
               "description": "Choose Switches, Lights or Fans for zone controls in Apple Home. Switch / Light keeps the existing layout. Sensorless zones also have a damper-opening slider. Save and restart the child bridge (or Homebridge) to apply layout changes.",
@@ -130,7 +166,33 @@
               ]
             },
             "devices[].linkZoneTemperatures",
-            "devices[].debug"
+            "devices[].debug",
+            {
+              "key": "devices[].things",
+              "type": "array",
+              "items": [
+                {
+                  "type": "section",
+                  "items": [
+                    "devices[].things[].controllerId",
+                    "devices[].things[].id",
+                    {
+                      "key": "devices[].things[].type",
+                      "type": "select",
+                      "options": { "required": true },
+                      "titleMap": [
+                        { "value": "garage-door", "name": "Garage door" },
+                        { "value": "gate", "name": "Gate" },
+                        { "value": "blind", "name": "Blind" },
+                        { "value": "relay-switch", "name": "Relay switch" },
+                        { "value": "relay-fan", "name": "Relay fan (known hardware only)" }
+                      ]
+                    },
+                    "devices[].things[].invert"
+                  ]
+                }
+              ]
+            }
           ]
         }
       ]

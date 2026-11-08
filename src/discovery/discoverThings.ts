@@ -1,7 +1,7 @@
 import type { ControllerPollState } from '../api/controllerPoller.js';
 import type { JsonObject } from '../api/systemData.js';
 
-export type ThingCapability = 'blind-capable' | 'garage-gate-capable' | 'unknown';
+export type ThingCapability = 'blind-capable' | 'garage-gate-capable' | 'relay-capable' | 'unknown';
 type Scalar = string | number | boolean | null;
 export interface ThingObservation {
   readonly controllerId: string;
@@ -10,6 +10,7 @@ export interface ThingObservation {
   readonly name?: string;
   readonly capability: ThingCapability;
   readonly physicalSubtype: 'undetermined';
+  readonly valueStatus: 'reported' | 'missing' | 'invalid';
   // Reported scalars only; no interpretation as position, motion or confirmed state.
   readonly reported: Readonly<Partial<Record<'channelDipState' | 'buttonType' | 'dimPercent' | 'value', Scalar>>>;
 }
@@ -25,7 +26,7 @@ const id = (v: unknown): v is string => typeof v === 'string' && /^[a-zA-Z0-9_-]
 const scalar = (v: unknown): v is Scalar => v === null || typeof v === 'boolean'
   || (typeof v === 'number' && Number.isFinite(v)) || (typeof v === 'string' && v.length <= 128);
 const capability = (dip: unknown): ThingCapability => dip === 1 || dip === 2 ? 'blind-capable'
-  : dip === 3 || dip === 10 ? 'garage-gate-capable' : 'unknown';
+  : dip === 3 || dip === 10 ? 'garage-gate-capable' : dip === 8 ? 'relay-capable' : 'unknown';
 const result = (status: ThingsDiscovery['status'], things: ThingObservation[] = [], invalidRecords = 0,
   duplicateRecords = 0): ThingsDiscovery => Object.freeze({ status, things: Object.freeze(things), invalidRecords,
   duplicateRecords, unknownRecords: things.filter(thing => thing.capability === 'unknown').length });
@@ -75,6 +76,7 @@ export function discoverThings(data: unknown): ThingsDiscovery {
     things.push(Object.freeze({ controllerId: mid.trim(), id: raw.id,
       identity: JSON.stringify(['AdvantageAir', mid.trim(), 'thing', raw.id]),
       ...(name ? { name } : {}), capability: capability(raw.channelDipState), physicalSubtype: 'undetermined',
+      valueStatus: raw.value === undefined ? 'missing' : scalar(raw.value) ? 'reported' : 'invalid',
       reported: Object.freeze(reported) }));
   }
   things.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
