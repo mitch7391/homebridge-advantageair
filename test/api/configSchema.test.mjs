@@ -7,6 +7,7 @@ import test from 'node:test';
 import { AdvantageAirClient } from '../../dist/api/advantageAirClient.js';
 import { PLATFORM_NAME } from '../../dist/settings.js';
 import { zoneLayout } from '../../dist/accessories/zoneLayout.js';
+import { configureThings } from '../../dist/discovery/configureThings.js';
 
 const config = JSON.parse(fs.readFileSync(new URL('../../config.schema.json', import.meta.url), 'utf8'));
 const properties = config.schema.properties;
@@ -77,7 +78,7 @@ test('native schema exposes controller setup without legacy or Homebridge-owned 
   assert.equal(config.customUi, undefined);
   assert.deepEqual(Object.keys(properties).sort(), ['debug', 'devices', 'name']);
   assert.deepEqual(Object.keys(controller.properties).sort(), [
-    'debug', 'excludedLightIds', 'homeName', 'ipAddress', 'linkZoneTemperatures', 'name', 'port', 'zoneControlType',
+    'debug', 'excludedLightIds', 'homeName', 'ipAddress', 'linkZoneTemperatures', 'name', 'port', 'things', 'zoneControlType',
   ]);
   assert.deepEqual(controller.required, ['ipAddress']);
   assert.equal(properties.devices.minItems, 1);
@@ -165,4 +166,56 @@ test('JSON-only light exclusions stay in the schema without any generated form c
   });
   assert.equal(controller.required.includes('excludedLightIds'), false);
   assert.equal(controller.properties.excludedLightIds.default, undefined);
+});
+
+test('sparse Things overrides retain validation without a manual inventory editor or defaults', () => {
+  const things = controller.properties.things;
+  assert.equal(controller.required.includes('things'), false);
+  assert.equal(things.default, undefined);
+  assert.equal(things.minItems, undefined);
+  assert.deepEqual(things.items.required, ['controllerId', 'id']);
+  assert.equal(things.items.additionalProperties, false);
+  assert.deepEqual(things.items.properties.type.enum, ['garage-door', 'gate']);
+  for (const property of Object.values(things.items.properties)) {
+    assert.equal(property.default, undefined);
+  }
+  assert.equal(JSON.stringify(config.layout).includes('things'), false);
+  assert.equal(JSON.stringify(config.layout).includes('*'), false);
+});
+
+test('Things settings validate without changing saved controller fields or omitted legacy defaults', () => {
+  const require = createRequire(import.meta.url);
+  const Ajv = require('ajv');
+  const validate = new Ajv().compile(config.schema);
+  const existing = { name: 'Advantage Air', debug: true, devices: [
+    { ipAddress: '192.0.2.1', port: 2025, homeName: 'AC', name: 'Controller', debug: false,
+      zoneControlType: 'fans', linkZoneTemperatures: true, excludedLightIds: ['l1'] },
+    { ipAddress: '192.0.2.2' },
+  ] };
+  const before = globalThis.structuredClone(existing);
+  assert.equal(validate(existing), true);
+  assert.deepEqual(existing, before);
+  for (const type of [undefined, ...controller.properties.things.items.properties.type.enum]) {
+    const entry = { controllerId: 'synthetic-controller', id: 't1', ...(type ? { type } : {}), invert: true, disabled: true };
+    const configured = globalThis.structuredClone(existing);
+    configured.devices[0].things = [entry];
+    assert.equal(validate(configured), true);
+    assert.equal(configureThings({ lastAttemptFailed: false }, [entry]).configurationStatus, 'valid');
+    const roundTrip = JSON.parse(JSON.stringify(configured));
+    assert.deepEqual(roundTrip, configured);
+    roundTrip.devices[0].things[0].disabled = false;
+    assert.equal(validate(roundTrip), true);
+    assert.equal(roundTrip.devices[0].things[0].invert, true);
+    assert.equal(roundTrip.devices[0].things[0].type, type);
+    delete roundTrip.devices[0].things;
+    assert.deepEqual(roundTrip, before);
+  }
+  for (const entry of [{}, { invert: false }, { controllerId: 'x', id: 't1', disabled: 1 }, { controllerId: ' ', id: 't1', type: 'gate' },
+    { controllerId: 'x', id: 'a/b', type: 'gate' }, { controllerId: 'x', id: 't1', type: 'fan' },
+    { controllerId: 'x', id: 't1', type: 'gate', invert: 'false' }]) {
+    const configured = globalThis.structuredClone(existing);
+    configured.devices[0].things = [entry];
+    assert.equal(validate(configured), false);
+    assert.equal(configureThings({ lastAttemptFailed: false }, [entry]).configurationStatus, 'invalid');
+  }
 });

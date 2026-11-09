@@ -8,7 +8,8 @@ const snapshot = things => ({ system: { mid: 'synthetic-controller', noOfAircons
 const record = (id, dip, name = 'Synthetic output') => ({ id, name, channelDipState: dip, value: 0 });
 
 test('verified numeric DIP mappings describe capability, never physical subtype or position', () => {
-  for (const [dip, expected] of [[1, 'blind-capable'], [2, 'blind-capable'], [3, 'garage-gate-capable'], [10, 'garage-gate-capable']]) {
+  for (const [dip, expected] of [[1, 'blind-capable'], [2, 'blind-capable'], [3, 'garage-gate-capable'],
+    [10, 'garage-gate-capable'], [4, 'on-off-light-capable'], [5, 'dimmable-light-capable'], [8, 'relay-capable']]) {
     const r = discoverThings(snapshot({ t1: record('t1', dip) }));
     assert.equal(r.things[0].capability, expected);
     assert.equal(r.things[0].physicalSubtype, 'undetermined');
@@ -17,7 +18,7 @@ test('verified numeric DIP mappings describe capability, never physical subtype 
 });
 
 test('unknown and malformed classification cannot gain capabilities from names', () => {
-  for (const dip of [undefined, null, '3', '1', 0, 4, -1, 1.5, {}, [], true, Infinity]) {
+  for (const dip of [undefined, null, '3', '1', '4', '5', 0, 6, -1, 1.5, {}, [], true, Infinity]) {
     for (const name of ['Garage', 'Gate', 'Blind', 'Fan']) {
       const thing = discoverThings(snapshot({ t1: record('t1', dip, name) })).things[0];
       assert.equal(thing.capability, 'unknown');

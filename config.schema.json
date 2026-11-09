@@ -69,6 +69,45 @@
                 "pattern": "^[a-zA-Z0-9_-]{1,64}$"
               }
             },
+            "things": {
+              "title": "MyPlace Things overrides (internal)",
+              "description": "Sparse identity-bound exceptions managed by the future discovery interface. No operational Things controls are enabled by this increment.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["controllerId", "id"],
+                "properties": {
+                  "controllerId": {
+                    "title": "Controller MID",
+                    "description": "Internal controller identity obtained from discovery; never rebound by name or address.",
+                    "type": "string",
+                    "pattern": "^\\S(?:.*\\S)?$"
+                  },
+                  "id": {
+                    "title": "Thing ID",
+                    "description": "Internal Thing ID obtained from discovery.",
+                    "type": "string",
+                    "pattern": "^[a-zA-Z0-9_-]{1,64}$"
+                  },
+                  "type": {
+                    "title": "Garage or gate confirmation",
+                    "type": "string",
+                    "enum": ["garage-door", "gate"]
+                  },
+                  "invert": {
+                    "title": "Invert reported endpoints",
+                    "description": "Swap the interpretation of reported 0 and 100. Does not alter controller values or establish physical position.",
+                    "type": "boolean"
+                  },
+                  "disabled": {
+                    "title": "Exclude from future HomeKit exposure",
+                    "type": "boolean",
+                    "description": "Preserve this entry and its overrides when disabled. False or omission restores default eligibility, not operational qualification."
+                  }
+                }
+              }
+            },
             "zoneControlType": {
               "title": "Zone Control Type",
               "description": "Choose Switches, Lights or Fans for zone controls in Apple Home. Switch / Light keeps the existing layout. Sensorless zones also have a damper-opening slider. Save and restart the child bridge (or Homebridge) to apply layout changes.",
