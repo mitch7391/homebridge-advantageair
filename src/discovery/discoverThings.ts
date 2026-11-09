@@ -1,7 +1,8 @@
 import type { ControllerPollState } from '../api/controllerPoller.js';
 import type { JsonObject } from '../api/systemData.js';
 
-export type ThingCapability = 'blind-capable' | 'garage-gate-capable' | 'relay-capable' | 'unknown';
+export type ThingCapability = 'blind-capable' | 'garage-gate-capable' | 'on-off-light-capable'
+  | 'dimmable-light-capable' | 'relay-capable' | 'unknown';
 type Scalar = string | number | boolean | null;
 export interface ThingObservation {
   readonly controllerId: string;
@@ -26,7 +27,8 @@ const id = (v: unknown): v is string => typeof v === 'string' && /^[a-zA-Z0-9_-]
 const scalar = (v: unknown): v is Scalar => v === null || typeof v === 'boolean'
   || (typeof v === 'number' && Number.isFinite(v)) || (typeof v === 'string' && v.length <= 128);
 const capability = (dip: unknown): ThingCapability => dip === 1 || dip === 2 ? 'blind-capable'
-  : dip === 3 || dip === 10 ? 'garage-gate-capable' : dip === 8 ? 'relay-capable' : 'unknown';
+  : dip === 3 || dip === 10 ? 'garage-gate-capable' : dip === 4 ? 'on-off-light-capable'
+    : dip === 5 ? 'dimmable-light-capable' : dip === 8 ? 'relay-capable' : 'unknown';
 const result = (status: ThingsDiscovery['status'], things: ThingObservation[] = [], invalidRecords = 0,
   duplicateRecords = 0): ThingsDiscovery => Object.freeze({ status, things: Object.freeze(things), invalidRecords,
   duplicateRecords, unknownRecords: things.filter(thing => thing.capability === 'unknown').length });

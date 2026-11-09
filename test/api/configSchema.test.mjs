@@ -116,7 +116,7 @@ test('standard layout hides retained labels, uses controller tabs and a numeric 
   const tabs = config.layout[1];
   assert.equal(tabs.type, 'tabarray');
   assert.equal(tabs.key, 'devices');
-  assert.deepEqual(controllerFields.slice(0, -1), [
+  assert.deepEqual(controllerFields, [
     { key: 'devices[].name', type: 'hidden', htmlClass: 'd-none' }, 'devices[].homeName', 'devices[].ipAddress',
     { key: 'devices[].port', type: 'number' },
     { key: 'devices[].zoneControlType', type: 'select', options: { required: true }, titleMap: [
@@ -168,27 +168,19 @@ test('JSON-only light exclusions stay in the schema without any generated form c
   assert.equal(controller.properties.excludedLightIds.default, undefined);
 });
 
-test('optional per-controller Things array uses standard form controls without automatic type selection', () => {
+test('sparse Things overrides retain validation without a manual inventory editor or defaults', () => {
   const things = controller.properties.things;
   assert.equal(controller.required.includes('things'), false);
   assert.equal(things.default, undefined);
   assert.equal(things.minItems, undefined);
-  assert.deepEqual(things.items.required, ['controllerId', 'id', 'type']);
+  assert.deepEqual(things.items.required, ['controllerId', 'id']);
   assert.equal(things.items.additionalProperties, false);
-  assert.equal(things.items.properties.type.default, undefined);
-  assert.equal(things.items.properties.invert.default, false);
-  const array = controllerFields.at(-1);
-  assert.equal(array.key, 'devices[].things');
-  assert.equal(array.type, 'array');
-  assert.equal(array.items.length, 1);
-  assert.equal(array.items[0].type, 'section');
-  const fields = array.items[0].items;
-  assert.deepEqual(fields.filter(item => typeof item === 'string'), [
-    'devices[].things[].controllerId', 'devices[].things[].id', 'devices[].things[].invert',
-  ]);
-  assert.equal(fields[2].key, 'devices[].things[].type');
-  assert.deepEqual(fields[2].options, { required: true });
-  assert.deepEqual(fields[2].titleMap.map(item => item.value), things.items.properties.type.enum);
+  assert.deepEqual(things.items.properties.type.enum, ['garage-door', 'gate']);
+  for (const property of Object.values(things.items.properties)) {
+    assert.equal(property.default, undefined);
+  }
+  assert.equal(JSON.stringify(config.layout).includes('things'), false);
+  assert.equal(JSON.stringify(config.layout).includes('*'), false);
 });
 
 test('Things settings validate without changing saved controller fields or omitted legacy defaults', () => {
@@ -203,18 +195,22 @@ test('Things settings validate without changing saved controller fields or omitt
   const before = globalThis.structuredClone(existing);
   assert.equal(validate(existing), true);
   assert.deepEqual(existing, before);
-  for (const type of controller.properties.things.items.properties.type.enum) {
-    const entry = { controllerId: 'synthetic-controller', id: 't1', type, invert: true };
+  for (const type of [undefined, ...controller.properties.things.items.properties.type.enum]) {
+    const entry = { controllerId: 'synthetic-controller', id: 't1', ...(type ? { type } : {}), invert: true, disabled: true };
     const configured = globalThis.structuredClone(existing);
     configured.devices[0].things = [entry];
     assert.equal(validate(configured), true);
     assert.equal(configureThings({ lastAttemptFailed: false }, [entry]).configurationStatus, 'valid');
     const roundTrip = JSON.parse(JSON.stringify(configured));
     assert.deepEqual(roundTrip, configured);
+    roundTrip.devices[0].things[0].disabled = false;
+    assert.equal(validate(roundTrip), true);
+    assert.equal(roundTrip.devices[0].things[0].invert, true);
+    assert.equal(roundTrip.devices[0].things[0].type, type);
     delete roundTrip.devices[0].things;
     assert.deepEqual(roundTrip, before);
   }
-  for (const entry of [{}, { controllerId: 'x', id: 't1' }, { controllerId: ' ', id: 't1', type: 'gate' },
+  for (const entry of [{}, { invert: false }, { controllerId: 'x', id: 't1', disabled: 1 }, { controllerId: ' ', id: 't1', type: 'gate' },
     { controllerId: 'x', id: 'a/b', type: 'gate' }, { controllerId: 'x', id: 't1', type: 'fan' },
     { controllerId: 'x', id: 't1', type: 'gate', invert: 'false' }]) {
     const configured = globalThis.structuredClone(existing);

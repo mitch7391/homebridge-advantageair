@@ -23,7 +23,10 @@ pure function from the existing snapshot update callback without another request
   key: https://github.com/Bre77/advantage_air/blob/master/advantage_air/__init__.py
 
 Numeric 1/2 are `blind-capable`; numeric 3/10 are `garage-gate-capable`;
-numeric 8 is `relay-capable`. DIP 8 is supported by Home Assistant's
+numeric 4 is `on-off-light-capable`; numeric 5 is `dimmable-light-capable`;
+numeric 8 is `relay-capable`. DIP 4/5 are supported by Home Assistant's
+[Things light implementation](https://github.com/home-assistant/core/blob/dev/homeassistant/components/advantage_air/light.py),
+inspected 9 November 2026. These categories do not qualify native control. DIP 8 is supported by Home Assistant's
 [relay switch implementation](https://github.com/home-assistant/core/blob/dev/homeassistant/components/advantage_air/switch.py),
 inspected 8 November 2026. It does not identify the connected load as a fan.
 Everything else is `unknown`, including numeric strings: the inspected evidence
@@ -67,90 +70,165 @@ fixture-privacy review is recommended; this work neither reproduces raw values
 nor cleans up historical files. New tests use small synthetic data, plus a
 synthetic 5,000-record collection.
 
-## Increment 2A: explicit configuration and reported endpoints
+## Increment 2A revision: discovery with sparse exceptions
 
-Optional `devices[].things` settings are available in the standard controller
-form. They are preparation only: nothing is registered, controlled or moved.
-The platform's existing managers and coordinator are unchanged. The pure
-`configureThings(pollState, device.things)` helper in
-`src/discovery/configureThings.ts` is not yet wired into platform callbacks.
-It consumes the existing Increment 1 discovery model, with no additional reads,
-timers, state cache, commands or dependencies.
+Automatic discovery, future automatic exposure for **separately qualified**
+hardware, and configuration only where necessary. This increment is read-only:
+no Things accessories, controller commands, timers, polling loops or runtime
+manager changes. Existing HVAC and LightManager behaviour remains unchanged.
+The pure `configureThings(pollState, device.things)` helper consumes Increment 1
+observations. It is not yet wired into platform callbacks or a custom UI.
 
-Example inside one controller entry (synthetic identifiers):
+Every result explicitly has `qualification: "unqualified"` and
+`operational: false`. Neither a DIP classification, endpoint value nor user
+confirmation can change these fields. An automatic candidate needs no user
+configuration, but is **not** qualified to operate. Future operational exposure
+requires a separate, evidence-backed qualification and accessory increment.
+
+| Numeric DIP | Capability | Intended future policy after qualification |
+| --- | --- | --- |
+| 1, 2 | Blind-capable | Automatic; no continuous position inferred |
+| 3, 10 | Garage/gate-capable | Require garage-door versus gate confirmation and separate safety qualification |
+| 4 | On/Off light-capable | Automatic, subject to lighting identity resolution |
+| 5 | Dimmable light-capable | Automatic, subject to dimming and lighting identity qualification |
+| 8 | General relay-capable | Automatic Switch only after maintained-output behaviour is verified |
+| Other/malformed | Unknown | Diagnostics only; no automatic exposure |
+
+DIP 8 does not distinguish momentary from maintained operation or identify the
+connected appliance. No relay type selection, Fan, Light or Outlet presentation
+is provided. Device names never establish capability, wiring or identity.
+
+### Internal override contract
+
+Optional `devices[].things` is a sparse array of identity-bound exceptions,
+not a saved inventory. The defective manual Things array editor has been removed
+from the standard form; schema validation remains. Users are not asked to enter
+MIDs or IDs. The subsequent discovery interface must obtain these automatically.
+The example below documents the internal format, not a manual setup requirement:
 
 ```json
 {
   "ipAddress": "192.0.2.1",
   "things": [
-    { "controllerId": "synthetic-controller", "id": "t1", "type": "garage-door", "invert": false },
-    { "controllerId": "synthetic-controller", "id": "t2", "type": "relay-switch" }
+    { "controllerId": "synthetic-controller", "id": "t1", "type": "gate", "invert": true, "disabled": true },
+    { "controllerId": "synthetic-controller", "id": "t2", "disabled": true }
   ]
 }
 ```
 
-`controllerId` is the exact nonblank `system.mid` (no surrounding whitespace),
-not an address or display name. `id` follows the discovery ID rules above.
-Matching uses both, so renaming or an IP change cannot retarget a device, and a
-replacement controller with the same Thing IDs does not silently match. Every
-entry within one controller's array must have the same MID. Keep real MIDs and
-controller data private; do not post full configuration or raw responses.
+Only `controllerId` and `id` are required within an override. Optional fields:
 
-| User-selected `type` | Required reported capability | Interpretation limit |
-| --- | --- | --- |
-| `garage-door` / `gate` | Numeric DIP 3 or 10 | No physical end-position, movement or obstruction proof |
-| `blind` | Numeric DIP 1 or 2 | No continuous position or travel calibration inferred |
-| `relay-switch` | Numeric DIP 8 | No proof of connected load state |
-| `relay-fan` | Numeric DIP 8 and an explicitly identified installed fan | No fan identification from DIP/name, speed or rotation feedback |
+- `disabled: true`: explicit exclusion. Preserve the entire entry while disabled.
+  False or omission restores default candidate eligibility, not qualification.
+- `invert: true`: swap logical endpoints only. False or omission leaves them as
+  reported. Toggling disabled must not discard inversion or type confirmation.
+- `type: "garage-door" | "gate"`: physical-type confirmation, valid only for a
+  reported garage/gate capability. There is no type/default requirement for
+  blinds, lights or ordinary relays.
 
-The user selects installed hardware; the reported `physicalSubtype` remains
-`undetermined`. A compatible selection is not electrical/safety qualification or
-permission to control it. Unknown hardware and capability/type mismatches remain
-unsupported. Relay fan selection records user knowledge only; its wiring, relay
-mode and safe operation still require hardware evidence before any exposure.
+Omitting `things` or using an empty array leaves discovery active with no
+exceptions. Discovery never writes defaults or candidate rows into saved config.
+The schema adds no default values to override fields. Existing HVAC settings and
+optional light exclusions are retained independently. The unmerged earlier
+2A types `blind`, `relay-switch` and `relay-fan` are no longer accepted;
+existing experimental entries are flagged, not silently converted or deleted.
 
-Omitting `things` selects nothing; an empty array also selects nothing. There is
-no default physical type. `invert` is optional and defaults to false. Invalid
-IDs, properties, types or inversion values, repeated IDs (even identical entries),
-and mixed controller MIDs invalidate the entire controller's Things configuration.
-Raw discovery remains available. Schema validation catches field errors; the pure
-helper additionally rejects duplicates and conflicts. Nothing about invalid
-Things settings changes the existing HVAC or lighting configuration.
+Matching uses the exact controller MID and Thing ID tuple, never names or IPs.
+An override for an old MID is retained as unavailable (or excluded) alongside
+new-controller candidates. The same Thing ID on a replacement controller does
+not inherit its settings. Mixed MIDs can therefore remain saved during a
+replacement; no automatic reassignment occurs. Keep real identifiers private.
 
-For a matched compatible observation, only numeric `value: 0` and `value: 100`
-produce a valid interpretation. The result carries `reportedValue`, `logicalValue`
-and `physicalState: "unknown"`. Inversion swaps only logical 0/100; it never
-changes raw data, identities or stored controller values. For example reported
-100 becomes logical 0 with inversion. No HomeKit characteristic value is emitted.
+Malformed values or duplicate overrides with identifiable MID/ID quarantine
+that identity only. All duplicate occurrences are rejected, including identical
+ones. An unidentifiable override might have been an exclusion of any device, so
+all Things in that configured controller fail closed until corrected. This does
+not affect HVAC, lighting, or separately configured controllers. Unsupported
+properties and attempts to supply qualification/operational flags are rejected.
+`invalidOverrides` counts structurally invalid/duplicate input entries;
+capability conflicts additionally produce `configurationStatus: "invalid"`.
 
-Legacy `AdvAir.sh` used 100/open and 0/closed with a manual `flip` option, and
-wrote these values through `/setThing`. That is evidence of command-state mapping,
-not proof of door position sensors. Its fallback treating other values as an
-endpoint is deliberately not reproduced. Missing values yield `unavailable`;
-malformed values, strings, booleans, null and non-endpoint numbers yield `invalid`.
-Discovery's `valueStatus` distinguishes an omitted value from a rejected
-non-scalar value without retaining malformed payloads. `buttonType` and
-`dimPercent` are retained but cannot establish movement, fan speed, obstruction,
-position or an alternative endpoint.
+### Result and freshness contract
 
-Results retain configured entries as unavailable when their observations are
-missing/quarantined. Partial discovery can still supply valid peers, while its
-partial status is preserved. Failed coordinator reads reject last-good data.
-The helper uses the existing freshness signal, not an invented age timeout;
-future consumers must use current coordinator snapshots and fault readings on
-shutdown/disconnection, not reuse an old successful result indefinitely.
-No status authorises removal of previously recognised hardware. Configuration
-and interpretation outputs are detached/frozen and are recalculated per snapshot.
+Results join current discovery with saved exceptions, preserving offline
+exceptions without pretending there is a current observation:
 
-## Next review gate
+| Status | Meaning |
+| --- | --- |
+| automatic-candidate | Known capability with no required user decision; still unqualified |
+| needs-type | Garage/gate capability awaiting physical-type confirmation |
+| confirmed-candidate | Compatible garage/gate confirmation; still unqualified |
+| excluded | Explicitly disabled; settings retained, current reading only if available |
+| unsupported | Unknown capability |
+| unavailable | Saved identity without a current valid observation |
+| invalid-override | Invalid, duplicate or capability-conflicting override |
+| ambiguous-lighting | Possible collision or inadequate lighting identity evidence |
 
-Increment 2B should first qualify sanitised hardware readbacks, relay modes,
-physical feedback availability and a read-only lifecycle with stable identities,
-faulting and non-removal tests. Separately decide safe HomeKit presentation where
-only command-state feedback exists. Neither a compatible configuration nor a
-numeric endpoint justifies an operational GarageDoorOpener or blind position.
-Writes and movement require separate approval and hardware-specific evidence.
-This foundation has no physical hardware acceptance or new package version.
+`configurationStatus` is default, valid or invalid. The discovery status remains
+separate: absent, present (including empty), partial, malformed or unavailable.
+No result authorises removal of previously recognised hardware. The helper is
+stateless: a later lifecycle/UI consumer must retain previously recognised
+inventory separately, rather than infer deletion when unsaved candidates are
+absent from a result. Partial discovery keeps useful peers; saved exceptions
+remain even when their records are quarantined.
+
+Failed coordinator reads reject last-good observations. The existing freshness
+signal is used, without an invented age timeout. Future consumers must use current
+coordinator snapshots and invalidate readings on shutdown/disconnection, never
+reuse an old successful projection indefinitely. Results are detached and frozen.
+
+Only numeric reported `value: 0` and `value: 100` have endpoint interpretation.
+The result contains `reportedValue`, `logicalValue` and
+`physicalState: "unknown"`. Inversion changes logical 0/100, not the observation,
+identity, configuration or controller. It establishes no physical position,
+electrical output state, movement, obstruction, fan speed or blind travel.
+Missing values are unavailable; malformed and non-endpoint values are invalid.
+`dimPercent` is retained as reported evidence, not interpreted as physical
+position or a qualified dimming control in this increment.
+
+Legacy `AdvAir.sh` sent 0/100 through /setThing and used manual inversion. This
+is evidence of command-state mapping only. Its fallback treating other values
+as endpoints is not reproduced. No HomeKit characteristic values are emitted.
+
+### Lighting overlap
+
+`myLights.lights` and `myThings.things` are separate controller collections.
+Home Assistant handles both; its implementation does not establish a universal
+cross-collection physical identity mapping. The inspected historical fixtures
+also do not establish such a mapping. Existing LightManager remains unchanged.
+
+The projection flags a Thing whose ID equals a light collection key or declared
+light ID as ambiguous, even if that light's state is malformed. This is a possible
+collision, **not** proof of equivalence or permission to merge identities. An
+unreadable lighting collection or any record rejected by the existing light
+validator also blocks automatic light/relay candidates, even with a valid
+collection key. Missing lighting data is uncertain when system.hasLights is
+true (or present but invalid); true with an empty collection is contradictory.
+An explicit false with no collection is not ambiguous. Omitted capability
+metadata retains candidate-only behaviour, not proof of physical separation.
+Names are never used for deduplication. Different IDs do not prove different
+physical equipment either; all candidates remain unqualified. Future automatic
+exposure must establish reliable collection semantics or cross-references first,
+and keep unresolved overlaps unexposed. This increment cannot create duplicates
+because it registers no accessories at all.
+
+## Next review gate: hybrid discovery interface
+
+Keep Advantage Air Device Settings as the standard HVAC form. A later MyPlace
+Things interface belongs underneath it, with decisions and saved exceptions
+rather than editable tabs for the entire inventory. Use an on-demand selector
+for advanced overrides; obtain technical identities from discovery, not users.
+Keep saved exceptions discoverable offline. Disabling/re-enabling must update
+only the disabled flag and preserve other overrides. Do not silently save every
+discovered device or remove entries on failed/partial reads.
+
+That independently reviewed increment should define a bounded, sanitised,
+read-only bridge from existing coordinator snapshots to the UI, with explicit
+freshness and controller-replacement handling, and test save/reload preservation.
+No custom UI or snapshot transport is implemented here. Qualification of relay
+mode, light identity/dimming, blind behaviour and garage/gate safety is separate;
+writes and operational accessories require further approval and hardware evidence.
+This foundation has no new package version or physical hardware qualification.
 
 ## Inventory completeness contract
 

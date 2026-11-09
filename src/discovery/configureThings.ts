@@ -1,59 +1,79 @@
+import { observeLights } from '../api/lightCommand.js';
 import type { ControllerPollState } from '../api/controllerPoller.js';
-import { observeThings, type ThingCapability, type ThingObservation, type ThingsDiscovery } from './discoverThings.js';
+import { observeThings, type ThingObservation, type ThingsDiscovery } from './discoverThings.js';
 
-export type ThingType = 'garage-door' | 'gate' | 'blind' | 'relay-switch' | 'relay-fan';
-export interface ThingConfiguration {
+/** Sparse exceptions; identities are supplied by discovery, never by a manual form. */
+export interface ThingOverride {
   readonly controllerId: string;
   readonly id: string;
-  readonly type: ThingType;
-  readonly invert: boolean;
+  readonly disabled?: boolean;
+  readonly invert?: boolean;
+  readonly type?: 'garage-door' | 'gate';
 }
 export type ThingValue =
   | Readonly<{ status: 'valid'; reportedValue: 0 | 100; logicalValue: 0 | 100; physicalState: 'unknown' }>
   | Readonly<{ status: 'invalid' | 'unavailable'; physicalState: 'unknown' }>;
 export interface ConfiguredThing {
-  readonly configuration: ThingConfiguration;
+  readonly controllerId: string;
+  readonly id: string;
+  readonly identity: string;
+  readonly override?: ThingOverride;
   readonly observation?: ThingObservation;
-  readonly status: 'compatible' | 'unsupported' | 'unavailable';
+  readonly status: 'automatic-candidate' | 'needs-type' | 'confirmed-candidate' | 'excluded'
+    | 'unsupported' | 'unavailable' | 'invalid-override' | 'ambiguous-lighting';
+  // Capability and a user decision are not operational qualification. No override can change these.
+  readonly qualification: 'unqualified';
+  readonly operational: false;
   readonly value: ThingValue;
 }
 export interface ConfiguredThings {
   readonly discovery: ThingsDiscovery;
-  readonly configurationStatus: 'disabled' | 'valid' | 'invalid';
+  readonly configurationStatus: 'default' | 'valid' | 'invalid';
+  readonly invalidOverrides: number;
   readonly things: readonly ConfiguredThing[];
 }
 
-const requiredCapability: Readonly<Record<ThingType, ThingCapability>> = Object.freeze({
-  'garage-door': 'garage-gate-capable', gate: 'garage-gate-capable', blind: 'blind-capable',
-  'relay-switch': 'relay-capable', 'relay-fan': 'relay-capable',
-});
 const object = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
+const validId = (value: unknown): value is string => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,64}$/.test(value);
+const identity = (controllerId: string, id: string) => JSON.stringify(['AdvantageAir', controllerId, 'thing', id]);
+interface OverrideEntry { controllerId: string; id: string; override?: ThingOverride }
 
-// Fail the controller's entire Things configuration closed on ambiguous settings.
-// This never rejects or changes the controller's independent HVAC/light settings.
-function parseConfiguration(input: unknown): readonly ThingConfiguration[] | undefined {
+// An attributable error blocks that identity only. An unidentifiable entry could be an
+// intended exclusion of any Thing, so all Things in this controller fail closed.
+function parseOverrides(input: unknown) {
+  const entries = new Map<string, OverrideEntry>();
+  let invalidOverrides = 0;
+  let unscopedInvalid = false;
+  if (input === undefined) {
+    return { entries, invalidOverrides, unscopedInvalid };
+  }
   if (!Array.isArray(input)) {
-    return undefined;
+    return { entries, invalidOverrides: 1, unscopedInvalid: true };
   }
-  const ids = new Set<string>();
-  const configurations: ThingConfiguration[] = [];
-  let controllerId: string | undefined;
   for (const entry of input) {
-    if (!object(entry) || Object.keys(entry).some(key => !['controllerId', 'id', 'type', 'invert'].includes(key))
-      || typeof entry.controllerId !== 'string' || !entry.controllerId.trim()
-      || entry.controllerId !== entry.controllerId.trim()
-      || typeof entry.id !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(entry.id)
-      || typeof entry.type !== 'string' || !Object.hasOwn(requiredCapability, entry.type)
-      || (entry.invert !== undefined && typeof entry.invert !== 'boolean')
-      || ids.has(entry.id) || (controllerId !== undefined && controllerId !== entry.controllerId)) {
-      return undefined;
+    if (!object(entry) || typeof entry.controllerId !== 'string' || !/^\S(?:.*\S)?$/.test(entry.controllerId)
+      || !validId(entry.id)) {
+      invalidOverrides++;
+      unscopedInvalid = true;
+      continue;
     }
-    controllerId = entry.controllerId;
-    ids.add(entry.id);
-    configurations.push(Object.freeze({ controllerId, id: entry.id, type: entry.type as ThingType, invert: entry.invert ?? false }));
+    const key = identity(entry.controllerId, entry.id);
+    const previous = entries.get(key);
+    const valid = !previous && !Object.keys(entry).some(k => !['controllerId', 'id', 'type', 'invert', 'disabled'].includes(k))
+      && (entry.type === undefined || entry.type === 'garage-door' || entry.type === 'gate')
+      && (entry.invert === undefined || typeof entry.invert === 'boolean')
+      && (entry.disabled === undefined || typeof entry.disabled === 'boolean');
+    if (!valid) {
+      invalidOverrides += previous?.override ? 2 : 1;
+    }
+    entries.set(key, { controllerId: entry.controllerId, id: entry.id,
+      ...(valid ? { override: Object.freeze({ controllerId: entry.controllerId, id: entry.id,
+        ...(entry.type === 'garage-door' || entry.type === 'gate' ? { type: entry.type } : {}),
+        ...(typeof entry.invert === 'boolean' ? { invert: entry.invert } : {}),
+        ...(typeof entry.disabled === 'boolean' ? { disabled: entry.disabled } : {}) }) } : {}) });
   }
-  return Object.freeze(configurations);
+  return { entries, invalidOverrides, unscopedInvalid };
 }
 
 const unknownValue = (status: 'invalid' | 'unavailable'): ThingValue => Object.freeze({ status, physicalState: 'unknown' });
@@ -71,22 +91,81 @@ function interpretValue(observation: ThingObservation, invert: boolean): ThingVa
     logicalValue: invert ? (value === 0 ? 100 : 0) : value, physicalState: 'unknown' });
 }
 
-/** Read-only foundation: consume the existing coordinator snapshot and devices[].things.
- * No config means no selected devices. No result authorises a write or accessory removal.
- * Failed reads reject last-good observations through the Increment 1 freshness adapter.
+// Do not use observeLights' accepted-only list: malformed light state can still
+// belong to a retained light accessory. A collision is ambiguity, not proven equivalence.
+function lightingEvidence(state: ControllerPollState) {
+  const ids = new Set<string>();
+  const lights = state.data?.myLights;
+  // hasLights is reported in system metadata; absence is not proof of no lights.
+  const hasLights = state.data?.system?.hasLights;
+  let uncertain = lights === undefined && hasLights !== undefined && hasLights !== false;
+  if (lights !== undefined) {
+    if (!object(lights) || !object(lights.lights)) {
+      uncertain = true;
+    } else {
+      // Reuse the existing record validator without logging IDs. Even a valid key
+      // cannot establish complete identity evidence for a rejected record.
+      uncertain = !object(state.data?.system) || observeLights(state.data!).length !== Object.keys(lights.lights).length
+        || (hasLights === true && Object.keys(lights.lights).length === 0);
+      for (const [key, raw] of Object.entries(lights.lights)) {
+        if (validId(key)) {
+          ids.add(key);
+        }
+        if (object(raw) && validId(raw.id)) {
+          ids.add(raw.id);
+        } else {
+          uncertain = true;
+        }
+      }
+    }
+  }
+  return { ids, uncertain };
+}
+
+/** Pure projection of current discovery plus sparse exceptions. No result authorises
+ * commands, accessory registration or removal. Retains configured identities offline;
+ * absent overrides do not mean absent hardware. No new polling or state storage.
  */
 export function configureThings(state: ControllerPollState, input: unknown): ConfiguredThings {
   const discovery = observeThings(state);
-  const configuration = input === undefined ? [] : parseConfiguration(input);
-  const configurationStatus = input === undefined ? 'disabled' : configuration ? 'valid' : 'invalid';
-  const observations = new Map(discovery.things.map(thing => [thing.identity, thing]));
-  const things = (configuration ?? []).map((entry): ConfiguredThing => {
-    const identity = JSON.stringify(['AdvantageAir', entry.controllerId, 'thing', entry.id]);
-    const observation = observations.get(identity);
-    const status = !observation ? 'unavailable'
-      : observation.capability === requiredCapability[entry.type] ? 'compatible' : 'unsupported';
-    return Object.freeze({ configuration: entry, ...(observation ? { observation } : {}), status,
-      value: status === 'compatible' ? interpretValue(observation!, entry.invert) : unknownValue('unavailable') });
+  const parsed = parseOverrides(input);
+  const lights = lightingEvidence(state);
+  const records = new Map<string, { observation?: ThingObservation; entry?: OverrideEntry }>();
+  for (const observation of discovery.things) {
+    records.set(observation.identity, { observation });
+  }
+  for (const [key, entry] of parsed.entries) {
+    records.set(key, { ...records.get(key), entry });
+  }
+  const things = [...records.entries()].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([key, { observation, entry }]) => {
+    const override = entry?.override;
+    const capability = observation?.capability;
+    let status: ConfiguredThing['status'];
+    if (parsed.unscopedInvalid || (entry && !override)) {
+      status = 'invalid-override';
+    } else if (override?.type && capability && capability !== 'garage-gate-capable') {
+      status = 'invalid-override';
+    } else if (override?.disabled === true) {
+      status = 'excluded';
+    } else if (!observation) {
+      status = 'unavailable';
+    } else if (capability === 'unknown') {
+      status = 'unsupported';
+    } else if (lights.ids.has(observation.id) || (lights.uncertain
+      && ['on-off-light-capable', 'dimmable-light-capable', 'relay-capable'].includes(capability!))) {
+      status = 'ambiguous-lighting';
+    } else if (capability === 'garage-gate-capable') {
+      status = override?.type ? 'confirmed-candidate' : 'needs-type';
+    } else {
+      status = 'automatic-candidate';
+    }
+    return Object.freeze({ identity: key, controllerId: observation?.controllerId ?? entry!.controllerId,
+      id: observation?.id ?? entry!.id, ...(override ? { override } : {}), ...(observation ? { observation } : {}), status,
+      qualification: 'unqualified' as const, operational: false as const,
+      value: observation && ['automatic-candidate', 'needs-type', 'confirmed-candidate', 'excluded'].includes(status)
+        ? interpretValue(observation, override?.invert ?? false) : unknownValue('unavailable') });
   });
-  return Object.freeze({ discovery, configurationStatus, things: Object.freeze(things) });
+  return Object.freeze({ discovery,
+    configurationStatus: parsed.invalidOverrides || things.some(t => t.status === 'invalid-override') ? 'invalid'
+      : input === undefined ? 'default' : 'valid', invalidOverrides: parsed.invalidOverrides, things: Object.freeze(things) });
 }
