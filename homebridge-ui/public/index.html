@@ -1,0 +1,32 @@
+<!-- Isolated Increment 2B-0 prototype: synthetic Things only. -->
+<style>
+  .prototype { max-width: 700px; margin: auto; padding: .75rem; }
+  .prototype .form-text { display: block; color: inherit; }
+  .prototype .nav-link { text-transform: none; color: inherit; }
+  .prototype #tabs .controller-tab { display: flex; align-items: center; flex-wrap: nowrap; border: 1px solid transparent; border-radius: 6px 6px 0 0; }
+  .prototype #tabs .controller-tab.active { background: #fff; border-color: #dee2e6 #dee2e6 #fff; }
+  .prototype #tabs .controller-tab .nav-link { padding-right: .5rem; border: 0; background: transparent; margin-bottom: 0; }
+  .dark-mode .prototype #tabs .controller-tab.active { background: #2b2b2b; border-color: transparent; }
+  .prototype .tab-close { border: 0; background: transparent; color: inherit; padding: .25rem .5rem; }
+  .prototype button:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
+  .prototype .hb-uix-switch input:focus-visible ~ .hb-uix-slider { outline: 2px solid currentColor; outline-offset: 2px; }
+  .prototype summary { cursor: pointer; font-weight: bold; }
+  .dark-mode .prototype .form-control, .dark-mode .prototype .form-select {
+    background-color: #2b2b2b; color: #fff; border-color: #555;
+  }
+</style>
+<main class="prototype ng-bs5-validate">
+  <img src="settings-header.png" alt="Homebridge and Advantage Air" width="700" class="d-block mx-auto img-fluid mb-3">
+  <h2 class="h4 mb-3">Advantage Air Device Settings</h2>
+  <ul id="tabs" class="nav nav-tabs" role="tablist" aria-label="Controllers"></ul>
+  <section id="controller" role="tabpanel" aria-label="Selected controller settings"></section>
+  <p id="status" role="status" class="small"></p>
+  <details id="things" class="border-top pt-3 mt-3">
+    <summary>MyPlace Things</summary>
+    <p id="inventory-label" class="mt-2 mb-2"></p>
+    <ul id="inventory" class="mb-2"></ul>
+    <p class="small mb-0">Synthetic, unqualified examples only. No discovery request or controller command is made.</p>
+  </details>
+  <section id="platform" class="border-top pt-3 mt-3" aria-label="Platform settings"></section>
+</main>
+<script type="module" src="app.mjs"></script>
