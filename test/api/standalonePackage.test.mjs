@@ -31,7 +31,7 @@ test('standalone registration and schema retain the native platform under the ne
   assert.equal(JSON.parse(fs.readFileSync(new URL('config.schema.json', root))).pluginAlias, PLATFORM_NAME);
   assertBetaPackage(pkg); // Supports the separately reviewed publication state too.
   assert.equal(pkg.version, '4.0.0-beta.3');
-  assert.equal(pkg.dependencies, undefined);
+  assert.deepEqual(pkg.dependencies, { '@homebridge/plugin-ui-utils': '2.2.7' });
   assert.equal(pkg.files.includes('AdvAir.sh'), false);
   const lock = JSON.parse(fs.readFileSync(new URL('package-lock.json', root)));
   assert.equal(lock.name, pkg.name);

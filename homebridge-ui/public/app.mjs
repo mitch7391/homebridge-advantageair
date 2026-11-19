@@ -1,13 +1,10 @@
 /* global window, document */
 import { Draft, validate } from './draft.mjs';
+import { DiscoverySession } from './discovery.mjs';
 
 const api = window.homebridge;
 api.disableSaveButton();
 const status = document.getElementById('status');
-const inventories = [
-  ['Bedroom blind — Blind-capable', 'Driveway — Garage/gate candidate', 'Patio — On/off light'],
-  ['Living room — Dimmable light', 'Garden output — Relay', 'Spare module — Unknown / unsupported'],
-];
 
 try {
   const [config, schema] = await Promise.all([api.getPluginConfig(), api.getPluginConfigSchema()]);
@@ -16,6 +13,8 @@ try {
   });
   const properties = schema.schema.properties;
   const touched = new Set();
+  // Discovery has its own state; it never updates Draft or the native Save controls.
+  let discovery;
 
   function field(container, key, definition, platform = false) {
     const device = platform ? draft.block() : draft.block().devices[draft.selected];
@@ -62,6 +61,7 @@ try {
       const value = definition.type === 'boolean' ? input.checked
         : definition.type === 'integer' ? (input.value === '' ? null : Number(input.value)) : input.value;
       void draft.edit(key, value, platform);
+      discovery.changed();
       // eslint-disable-next-line @typescript-eslint/no-use-before-define
       showError();
       if (key === 'homeName') {
@@ -122,13 +122,17 @@ try {
   }
 
   function renderThings() {
-    document.getElementById('inventory-label').textContent =
-      'Synthetic examples for ' + (draft.block().devices?.[draft.selected]?.homeName || 'selected controller');
+    const result = discovery.view(draft.keys[draft.selected], draft.block().devices?.[draft.selected]);
+    const summary = result.status === 'loading' ? 'Reading saved controller settings…'
+      : result.status === 'present' && result.things.length === 0 ? 'No Things reported in this observation.'
+        : 'Discovery: ' + result.status + (result.reason ? ' (' + result.reason.replaceAll('-', ' ') + ')' : '');
+    document.getElementById('inventory-label').textContent = summary
+      + (result.observedAt ? ' — observed ' + new Date(result.observedAt).toLocaleTimeString() : '');
     const list = document.getElementById('inventory');
     list.replaceChildren();
-    for (const text of inventories[draft.keys[draft.selected]] || ['No synthetic inventory for this controller. Saved overrides are retained.']) {
+    for (const thing of result.things) {
       const item = document.createElement('li');
-      item.textContent = text;
+      item.textContent = thing.name + ' — ' + thing.capability + ' — ' + thing.status;
       list.append(item);
     }
   }
@@ -237,7 +241,10 @@ try {
   }
 
   document.getElementById('things').addEventListener('toggle', event => draft.toggleThings(event.target.open));
+  discovery = new DiscoverySession(config, draft.keys, (path, body) => api.request(path, body), renderThings);
   render();
+  window.addEventListener('pagehide', () => discovery.close(), { once: true });
+  void discovery.start();
 } catch {
   api.disableSaveButton();
   status.textContent = 'Configuration could not be loaded safely. Close without saving and review the existing platform configuration.';

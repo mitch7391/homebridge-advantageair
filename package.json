@@ -80,7 +80,7 @@
     "lab:logs:homebridge": "node dev/lab/lab.mjs logs homebridge",
     "lab:logs:simulator": "node dev/lab/lab.mjs logs simulator",
     "watch": "npm run build && npm link && nodemon",
-    "test": "npm run build && node --test test/api/*.test.mjs test/discovery/*.test.mjs test/accessories/*.test.mjs",
+    "test": "npm run build && node --test test/api/*.test.mjs test/discovery/*.test.mjs test/accessories/*.test.mjs test/ui/*.test.mjs",
     "prepack": "npm run build",
     "check:package": "node dev/package-check.mjs",
     "check:homebridge1": "node dev/compatibility/homebridge1.mjs"
@@ -99,5 +99,8 @@
   "publishConfig": {
     "tag": "beta",
     "registry": "https://registry.npmjs.org/"
+  },
+  "dependencies": {
+    "@homebridge/plugin-ui-utils": "2.2.7"
   }
 }

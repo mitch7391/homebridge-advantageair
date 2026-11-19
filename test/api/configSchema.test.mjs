@@ -75,7 +75,7 @@ test('native schema exposes controller setup without legacy or Homebridge-owned 
   assert.equal(config.pluginType, 'platform');
   assert.equal(config.singular, true);
   assert.equal(config.strictValidation, false);
-  assert.equal(config.customUi, undefined);
+  assert.equal(config.customUi, true);
   assert.deepEqual(Object.keys(properties).sort(), ['debug', 'devices', 'name']);
   assert.deepEqual(Object.keys(controller.properties).sort(), [
     'debug', 'excludedLightIds', 'homeName', 'ipAddress', 'linkZoneTemperatures', 'name', 'port', 'things', 'zoneControlType',
