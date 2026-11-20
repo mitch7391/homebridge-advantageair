@@ -61,7 +61,7 @@ try {
   assertBetaPackage(manifest);
   assert.equal(manifest.license, 'MIT');
   assert.equal(manifest.author, 'mitch7391');
-  assert.equal(Object.keys(manifest.dependencies ?? {}).length, 0);
+  assert.deepEqual(manifest.dependencies, { '@homebridge/plugin-ui-utils': '2.2.7' });
 
   const expected = [
     'package.json', 'README.md', 'config.schema.json',
