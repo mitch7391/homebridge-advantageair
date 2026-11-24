@@ -132,7 +132,14 @@ try {
   const sourcePackage = read(path.join(root, 'package.json'));
   const runtimeFiles = fs.readdirSync(path.join(root, 'dist'), { recursive: true })
     .filter(file => /\.(?:js|ts|map)$/.test(file)).map(file => 'dist/' + file.split(path.sep).join('/'));
-  const expected = ['package.json', 'README.md', ...sourcePackage.files.filter(file => !file.includes('*')), ...runtimeFiles];
+  const uiFiles = [
+    'homebridge-ui/server.js', 'homebridge-ui/discovery-service.mjs',
+    'homebridge-ui/public/index.html', 'homebridge-ui/public/app.mjs',
+    'homebridge-ui/public/draft.mjs', 'homebridge-ui/public/discovery.mjs',
+    'homebridge-ui/public/settings-header.png',
+  ];
+  const expected = ['package.json', 'README.md', ...sourcePackage.files.filter(file => !file.includes('*')),
+    ...runtimeFiles, ...uiFiles];
   assert.deepEqual([...members].sort(), expected.map(file => 'package/' + file).sort(), 'Unexpected standalone package inventory.');
   assert.equal(new Set(members).size, members.length);
   assert.ok(!members.some(member => /AdvAir\.sh|legacyCompatibility/.test(member)), 'No legacy backend/handler in native tarball.');
