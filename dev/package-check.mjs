@@ -68,6 +68,10 @@ try {
     'LICENSE', 'LICENSE.homebridge-template', 'TEMPLATE_SOURCE.txt',
     'assets/README.md', 'assets/settings-header.png', 'assets/settings-header.svg', 'docs/v3-migration.md',
     'docs/native-package-transition.md', 'docs/beta1-testing.md',
+    'homebridge-ui/server.js', 'homebridge-ui/discovery-service.mjs',
+    'homebridge-ui/public/index.html', 'homebridge-ui/public/app.mjs',
+    'homebridge-ui/public/draft.mjs', 'homebridge-ui/public/discovery.mjs',
+    'homebridge-ui/public/settings-header.png',
   ];
   for (const source of filesBelow(path.join(root, 'src'))) {
     if (source.endsWith('.ts') && !source.endsWith('.d.ts')) {

@@ -54,6 +54,7 @@
     "dist/**/*.js",
     "dist/**/*.d.ts",
     "dist/**/*.js.map",
+    "homebridge-ui/**",
     "config.schema.json",
     "LICENSE",
     "LICENSE.homebridge-template",
