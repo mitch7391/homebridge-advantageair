@@ -214,10 +214,23 @@ because it registers no accessories at all.
 
 ## Next review gate: hybrid discovery interface
 
-Keep Advantage Air Device Settings as the standard HVAC form. A later MyPlace
-Things interface belongs underneath it, with decisions and saved exceptions
-rather than editable tabs for the entire inventory. Use an on-demand selector
-for advanced overrides; obtain technical identities from discovery, not users.
+Keep the existing controller settings and controller tabs. Within each controller,
+MyPlace Things automatically presents named, naturally wrapping configuration tabs
+for discovered garage/gate, blind and general relay candidates, subject to existing
+identity, ambiguity and invalid-override safeguards. Users may edit supported
+options or leave defaults unchanged; no advanced selector or manual JSON entry
+is required for these capabilities. Only the selected Thing card is displayed.
+
+Ordinary on/off and dimmable lights do not receive automatic tabs merely because
+they are discovered. Unknown or unsupported discoveries remain diagnostic only.
+Existing identifiable saved overrides remain accessible, including lights and
+unavailable identities, and are preserved even when editing is unsafe.
+
+Automatic UI presentation is not automatic operational exposure: all Things
+remain unqualified and non-operational. No new capabilities or override fields
+are introduced. Discovery, rendering and selection never create saved entries;
+only explicit user edits create or change sparse overrides.
+
 Keep saved exceptions discoverable offline. Disabling/re-enabling must update
 only the disabled flag and preserve other overrides. Do not silently save every
 discovered device or remove entries on failed/partial reads.

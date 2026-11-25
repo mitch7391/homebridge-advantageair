@@ -46,6 +46,9 @@ jobs:
       - name: Build and Test plugin
         run: npm test
 
+      - name: Prime offline package dependency cache
+        run: npm cache add @homebridge/plugin-ui-utils@2.2.7
+
       - name: Check package contents
         run: npm run check:package
 
@@ -70,6 +73,9 @@ jobs:
 
       - name: Check compatibility harness style
         run: npx --no-install eslint dev/compatibility/homebridge1.mjs --max-warnings=0
+
+      - name: Prime offline package dependency cache
+        run: npm cache add @homebridge/plugin-ui-utils@2.2.7
 
       - name: Validate package and run actual Homebridge
         shell: bash
