@@ -60,6 +60,8 @@ export class Draft {
     this.sent = 0;
     this.pending = null;
     this.failed = false;
+    this.createdThingOverrides = new WeakSet();
+    this.createdThingsArrays = new WeakSet();
     this.status();
   }
 
@@ -128,6 +130,48 @@ export class Draft {
     return this.changed();
   }
 
+  editThing(controllerKey, controllerId, id, field, value) {
+    const index = this.keys.indexOf(controllerKey);
+    if (index < 0 || typeof controllerId !== 'string' || !/^\S(?:.*\S)?$/.test(controllerId)
+      || typeof id !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(id)
+      || !['disabled', 'invert', 'type'].includes(field)
+      || (field === 'type' ? value !== undefined && !['garage-door', 'gate'].includes(value) : typeof value !== 'boolean')) {
+      throw new Error('Invalid Thing edit.');
+    }
+    const device = this.config[this.blockIndex].devices[index];
+    if (device.things !== undefined && !Array.isArray(device.things)) {
+      throw new Error('Malformed Things overrides.');
+    }
+    const matches = (device.things || []).filter(t => t?.controllerId === controllerId && t?.id === id);
+    if (matches.length > 1) {
+      throw new Error('Ambiguous Thing override.');
+    }
+    const existing = matches[0];
+    if ((!existing && (value === false || value === undefined)) || (existing && existing[field] === value)) {
+      return this.pending || Promise.resolve();
+    }
+    if (!existing) {
+      if (device.things === undefined) {
+        device.things = [];
+        this.createdThingsArrays.add(device);
+      }
+      const entry = { controllerId, id, [field]: value };
+      this.createdThingOverrides.add(entry);
+      device.things.push(entry);
+    } else if (value === undefined) {
+      delete existing[field];
+      if (this.createdThingOverrides.has(existing) && Object.keys(existing).every(k => ['controllerId', 'id'].includes(k))) {
+        device.things.splice(device.things.indexOf(existing), 1);
+        if (!device.things.length && this.createdThingsArrays.has(device)) {
+          delete device.things;
+        }
+      }
+    } else {
+      existing[field] = value;
+    }
+    return this.changed();
+  }
+
   changed() {
     this.revision++;
     return this.schedule();
@@ -159,5 +203,56 @@ export class Draft {
     } catch {
       this.failed = true; // No automatic retries or saving an older host draft.
     }
+  }
+}
+
+
+// Presentation only: does not schedule configuration updates or control native Save.
+export class DraftStatusPresentation {
+  constructor(render, clock = {
+    schedule: (callback, delay) => globalThis.setTimeout(callback, delay),
+    cancel: timer => globalThis.clearTimeout(timer),
+  }) {
+    this.render = render;
+    this.clock = clock;
+    this.generation = 0;
+    this.pending = false;
+    this.closed = false;
+  }
+
+  show(message) {
+    if (this.closed) {
+      return;
+    }
+    if (message === 'Updating draft…') {
+      if (this.pending) {
+        return;
+      }
+      this.pending = true;
+      const generation = ++this.generation;
+      this.render('', false);
+      this.timer = this.clock.schedule(() => {
+        if (!this.closed && this.pending && generation === this.generation) {
+          this.render('Updating draft...', true);
+        }
+      }, 300);
+      return;
+    }
+    this.cancel();
+    this.render(message, false);
+  }
+
+  cancel() {
+    this.generation++;
+    this.pending = false;
+    if (this.timer !== undefined) {
+      this.clock.cancel(this.timer);
+      this.timer = undefined;
+    }
+  }
+
+  close() {
+    this.closed = true;
+    this.cancel();
   }
 }

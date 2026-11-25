@@ -97,7 +97,7 @@ test('out-of-order completions follow stable keys while tabs are removed and con
   assert.deepEqual(initial, config());
 });
 
-test('port and sparse override edits suppress results; unrelated display edits do not', async () => {
+test('port edits suppress results; sparse override and display edits retain observations', async () => {
   const initial = config(); const m = await manifest(initial);
   const session = new DiscoverySession(initial, [0, 1], async (path, body) => path === '/things/session' ? m
     : { token: body.token, status: 'present', things: [] });
@@ -105,7 +105,7 @@ test('port and sparse override edits suppress results; unrelated display edits d
   const device = initial[0].devices[0];
   assert.equal(session.view(0, { ...device, port: 2025 }).reason, 'unsaved-controller-changes');
   assert.equal(session.view(0, { ...device, port: null }).reason, 'unsaved-controller-changes');
-  assert.equal(session.view(0, { ...device, things: [] }).reason, 'unsaved-controller-changes');
+  assert.equal(session.view(0, { ...device, things: [] }).status, 'present');
   assert.equal(session.view(0, { ...device, homeName: 'Renamed', debug: true }).status, 'present');
 });
 
@@ -174,7 +174,7 @@ test('a nonresponsive UI helper has a bounded wait and no automatic retry', asyn
 
 test('UI renders names as text and initializes discovery only after the form renders', async () => {
   const app = await readFile(new URL('../../homebridge-ui/public/app.mjs', import.meta.url), 'utf8');
-  assert.match(app, /item.textContent = thing.name/);
+  assert.match(app, /heading.textContent = thing.name/);
   assert.doesNotMatch(app, /innerHTML|inventories =/);
   assert.ok(app.lastIndexOf('render();') < app.indexOf('void discovery.start()'));
   const ui = await readFile(new URL('../../homebridge-ui/public/discovery.mjs', import.meta.url), 'utf8');

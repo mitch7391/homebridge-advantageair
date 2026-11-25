@@ -14,6 +14,17 @@
   .dark-mode .prototype .form-control, .dark-mode .prototype .form-select {
     background-color: #2b2b2b; color: #fff; border-color: #555;
   }
+  .prototype .thing-tabs { display: flex; flex-wrap: wrap; gap: .25rem; max-width: 100%; padding: .25rem 0; }
+  .prototype .thing-tabs button { flex: 0 1 auto; min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; background: transparent; color: inherit; border: 1px solid transparent; border-radius: 6px 6px 0 0; padding: .5rem; }
+  .prototype .thing-tabs button[aria-selected="true"] { background: #fff; border-color: #dee2e6 #dee2e6 #fff; }
+  .dark-mode .prototype .thing-tabs button[aria-selected="true"] { background: #2b2b2b; border-color: transparent; }
+  .prototype.ng-bs5-validate .thing-tabs .nav-link, .prototype.ng-bs5-validate .thing-tabs .nav-link.active { color: inherit; }
+  .dark-mode .prototype.ng-bs5-validate .thing-tabs .nav-link { color: #fff; }
+  .prototype .thing-tabs .nav-link:hover { border-color: rgba(127,127,127,.4); }
+  .prototype .thing-card { padding: .75rem; border: 1px solid rgba(127,127,127,.4); border-radius: .25rem; overflow-wrap: anywhere; }
+  .prototype #status:empty { display: none; }
+  .prototype #status.draft-progress { position: fixed; right: .75rem; bottom: .5rem; margin: 0; padding: .25rem .5rem; border-radius: .25rem; background: #fff; color: #212529; z-index: 10; pointer-events: none; }
+  .dark-mode .prototype #status.draft-progress { background: #2b2b2b; color: #fff; }
 </style>
 <main class="prototype ng-bs5-validate">
   <img src="settings-header.png" alt="Homebridge and Advantage Air" width="700" class="d-block mx-auto img-fluid mb-3">
@@ -24,8 +35,8 @@
   <details id="things" class="border-top pt-3 mt-3">
     <summary>MyPlace Things</summary>
     <p id="inventory-label" class="mt-2 mb-2" role="status"></p>
-    <ul id="inventory" class="mb-2"></ul>
-    <p class="small mb-0">Read-only session observation, not live physical state. All Things remain unqualified and non-operational. Saved overrides are retained.</p>
+    <div id="inventory" class="mb-2"></div>
+    <p class="small mb-0">MyPlace Things control is not yet enabled in this development version.</p>
   </details>
   <section id="platform" class="border-top pt-3 mt-3" aria-label="Platform settings"></section>
 </main>

@@ -182,10 +182,9 @@ export class DiscoverySession {
     if (this.invalidated || this.conflicts.has(entry.token)) {
       return unavailable(this.invalidated ? 'saved-configuration-changed' : 'duplicate-controller-identity');
     }
-    // Rename/logging edits do not change hardware association. Connection or override edits invalidate display.
+    // Rename/logging edits do not change hardware association. Connection edits invalidate display; override presentation is derived separately.
     if (device.ipAddress !== entry.device.ipAddress
-      || (device.port === undefined ? 2025 : device.port) !== (entry.device.port === undefined ? 2025 : entry.device.port)
-      || canonical(device.things) !== canonical(entry.device.things)) {
+      || (device.port === undefined ? 2025 : device.port) !== (entry.device.port === undefined ? 2025 : entry.device.port)) {
       return unavailable('unsaved-controller-changes');
     }
     return entry.result;
@@ -198,4 +197,71 @@ export class DiscoverySession {
     }
     this.results.clear();
   }
+}
+
+
+// UI-only projection: never changes discovery, configuration or operational qualification.
+export const thingKey = thing => JSON.stringify([thing.controllerId, thing.id]);
+const identifiable = thing => thing && typeof thing.controllerId === 'string' && /^\S(?:.*\S)?$/.test(thing.controllerId)
+  && typeof thing.id === 'string' && /^[a-zA-Z0-9_-]{1,64}$/.test(thing.id);
+
+export class ThingSelection {
+  constructor() {
+    this.selected = new Map();
+  }
+  choose(controller, key) {
+    this.selected.set(controller, key);
+  }
+  current(controller, things) {
+    const previous = this.selected.get(controller);
+    const key = things.some(thing => thing.key === previous) ? previous : things[0]?.key;
+    if (key !== undefined) {
+      this.selected.set(controller, key);
+    }
+    return key;
+  }
+}
+
+export function thingCards(result, overrides) {
+  const saved = Array.isArray(overrides) ? overrides : [];
+  const records = new Map();
+  for (const thing of [...(result.things || []), ...saved]) {
+    if (identifiable(thing)) {
+      records.set(thingKey(thing), thing);
+    }
+  }
+  return [...records.keys()].sort().map(key => {
+    const observations = (result.things || []).filter(t => identifiable(t) && thingKey(t) === key);
+    const matches = saved.filter(t => identifiable(t) && thingKey(t) === key);
+    const observation = observations.length === 1 ? observations[0] : undefined;
+    const identity = records.get(key);
+    const override = matches[0];
+    const malformed = (overrides !== undefined && !Array.isArray(overrides)) || saved.some(t => !identifiable(t));
+    const invalid = malformed || matches.length > 1 || observations.length > 1 || (override && (
+      Object.keys(override).some(k => !['controllerId', 'id', 'type', 'disabled', 'invert'].includes(k))
+      || ['disabled', 'invert'].some(k => k in override && typeof override[k] !== 'boolean')
+      || ('type' in override && !['garage-door', 'gate'].includes(override.type))));
+    const capability = observation?.capability || 'unknown';
+    const blocked = invalid || ['invalid-override', 'ambiguous-lighting'].includes(observation?.status);
+    const present = ['present', 'partial'].includes(result.status) && observation && capability !== 'unknown';
+    const automaticTab = ['garage-gate-capable', 'blind-capable', 'relay-capable'].includes(capability)
+      && !blocked && Boolean(present) && observation.status !== 'unsupported';
+    if (!matches.length && !automaticTab) {
+      return undefined;
+    }
+    return {
+      key, controllerId: identity.controllerId, id: identity.id,
+      name: observation?.name?.trim() || 'Thing ' + identity.id,
+      capability, override, editable: !blocked && (Boolean(present) || matches.length === 1),
+      discoveryStatus: observation ? result.status : 'unavailable',
+      configurationStatus: invalid ? 'invalid overrides — preserved without editing'
+        : override?.disabled ? 'excluded'
+          : override?.type && capability !== 'unknown' && capability !== 'garage-gate-capable' ? 'incompatible type'
+            : capability === 'garage-gate-capable' ? (override?.type || 'garage/gate decision required')
+              : override ? 'draft overrides retained' : 'default — no override',
+      // Saved backend safety verdict remains explicit; draft edits cannot qualify hardware.
+      safetyStatus: observation?.status || 'unavailable',
+      qualification: 'unqualified', operational: false,
+    };
+  }).filter(Boolean);
 }

@@ -1,20 +1,26 @@
 /* global window, document */
-import { Draft, validate } from './draft.mjs';
-import { DiscoverySession } from './discovery.mjs';
+import { Draft, validate, DraftStatusPresentation } from './draft.mjs';
+import { DiscoverySession, ThingSelection, thingCards } from './discovery.mjs';
 
 const api = window.homebridge;
 api.disableSaveButton();
 const status = document.getElementById('status');
+const statusPresentation = new DraftStatusPresentation((message, progress) => {
+  status.classList.toggle('draft-progress', progress);
+  status.textContent = message;
+});
+window.addEventListener('pagehide', () => statusPresentation.close(), { once: true });
 
 try {
   const [config, schema] = await Promise.all([api.getPluginConfig(), api.getPluginConfigSchema()]);
   const draft = new Draft(config, api, message => {
-    status.textContent = message.startsWith('Controller ') ? 'Complete the required controller settings before saving.' : message;
+    statusPresentation.show(message.startsWith('Controller ') ? 'Complete the required controller settings before saving.' : message);
   });
   const properties = schema.schema.properties;
   const touched = new Set();
   // Discovery has its own state; it never updates Draft or the native Save controls.
   let discovery;
+  const thingSelection = new ThingSelection();
 
   function field(container, key, definition, platform = false) {
     const device = platform ? draft.block() : draft.block().devices[draft.selected];
@@ -29,7 +35,7 @@ try {
     label.textContent = definition.title;
     const required = !platform && properties.devices.items.required.includes(key);
     // The schema layout also marks the defaulted zone selector as required in the form.
-    if (required || (!platform && key === 'zoneControlType')) {
+    if (required || (!platform && ['zoneControlType', 'port'].includes(key))) {
       label.append(' *');
     }
     if (required) {
@@ -122,18 +128,150 @@ try {
   }
 
   function renderThings() {
+    const focused = document.activeElement;
+    const restoreFocus = document.getElementById('inventory').contains(focused) ? focused?.id : undefined;
     const result = discovery.view(draft.keys[draft.selected], draft.block().devices?.[draft.selected]);
-    const summary = result.status === 'loading' ? 'Reading saved controller settings…'
-      : result.status === 'present' && result.things.length === 0 ? 'No Things reported in this observation.'
-        : 'Discovery: ' + result.status + (result.reason ? ' (' + result.reason.replaceAll('-', ' ') + ')' : '');
-    document.getElementById('inventory-label').textContent = summary
-      + (result.observedAt ? ' — observed ' + new Date(result.observedAt).toLocaleTimeString() : '');
+    const summary = result.status === 'loading' ? 'Loading Things...'
+      : result.status === 'present' ? (result.things.length ? '' : 'No Things found.')
+        : result.status === 'partial' ? 'Some Things could not be identified. Saved settings are retained.'
+          : result.status === 'absent' ? 'No Things reported. Saved settings are retained.'
+            : 'Things are unavailable. Saved settings are retained.';
+    const summaryLabel = document.getElementById('inventory-label');
+    summaryLabel.textContent = summary;
+    summaryLabel.hidden = !summary;
     const list = document.getElementById('inventory');
     list.replaceChildren();
-    for (const thing of result.things) {
-      const item = document.createElement('li');
-      item.textContent = thing.name + ' — ' + thing.capability + ' — ' + thing.status;
-      list.append(item);
+    const controllerKey = draft.keys[draft.selected];
+    const cards = thingCards(result, draft.block().devices?.[draft.selected]?.things);
+    const selected = thingSelection.current(controllerKey, cards);
+    const tabs = document.createElement('div');
+    tabs.className = 'thing-tabs nav nav-tabs';
+    tabs.setAttribute('role', 'tablist');
+    tabs.setAttribute('aria-label', 'MyPlace Things');
+    const panel = document.createElement('section');
+    panel.id = 'thing-card';
+    panel.className = 'thing-card';
+    panel.setAttribute('role', 'tabpanel');
+    function selectThing(key) {
+      thingSelection.choose(controllerKey, key);
+      renderThings();
+      const active = list.querySelector('[aria-selected="true"]');
+      active?.focus({ preventScroll: true });
+    }
+    cards.forEach((thing, index) => {
+      const tab = document.createElement('button');
+      tab.type = 'button';
+      tab.id = 'thing-tab-' + encodeURIComponent(thing.key);
+      tab.className = 'nav-link' + (thing.key === selected ? ' active' : '');
+      tab.textContent = thing.name + (cards.filter(t => t.name === thing.name).length > 1
+        ? ' (' + thing.id + ', ' + thing.controllerId + ')' : '');
+      tab.setAttribute('aria-label', thing.name + ' (Thing ' + thing.id + ', controller ' + thing.controllerId + ')');
+      tab.setAttribute('role', 'tab');
+      tab.setAttribute('aria-selected', String(thing.key === selected));
+      tab.setAttribute('aria-controls', panel.id);
+      tab.tabIndex = thing.key === selected ? 0 : -1;
+      tab.addEventListener('click', () => selectThing(thing.key));
+      tab.addEventListener('keydown', event => {
+        const next = event.key === 'ArrowRight' ? (index + 1) % cards.length
+          : event.key === 'ArrowLeft' ? (index + cards.length - 1) % cards.length
+            : event.key === 'Home' ? 0 : event.key === 'End' ? cards.length - 1 : -1;
+        if (next >= 0) {
+          event.preventDefault();
+          selectThing(cards[next].key);
+        }
+      });
+      tabs.append(tab);
+      if (thing.key !== selected) {
+        return;
+      }
+      panel.setAttribute('aria-labelledby', tab.id);
+      const heading = document.createElement('h3');
+      heading.className = 'h5';
+      heading.textContent = thing.name;
+      const details = document.createElement('p');
+      details.textContent = {
+        'blind-capable': 'Blind', 'garage-gate-capable': 'Garage door or gate', 'relay-capable': 'Relay',
+        'on-off-light-capable': 'Light', 'dimmable-light-capable': 'Dimmable light',
+      }[thing.capability] || 'Device type unavailable';
+      panel.append(heading, details);
+      const problem = !thing.editable ? 'These settings cannot safely be edited. Existing settings are retained.'
+        : thing.configurationStatus === 'incompatible type' ? 'The saved device type does not match this Thing.'
+          : thing.discoveryStatus === 'unavailable' ? 'This Thing is unavailable. Saved settings are retained.' : '';
+      if (problem) {
+        const message = document.createElement('p');
+        message.textContent = problem;
+        panel.append(message);
+      }
+      const options = [
+        ...((thing.capability === 'garage-gate-capable' || thing.override?.type) ? [['type', 'Garage/gate type']] : []),
+        ['disabled', 'Disable Thing'],
+        ['invert', 'Invert'],
+      ];
+      for (const [key, labelText] of options) {
+        const label = document.createElement('label');
+        label.className = 'd-block mb-2';
+        const input = document.createElement(key === 'type' ? 'select' : 'input');
+        input.id = 'thing-option-' + key;
+        input.disabled = !thing.editable;
+        if (key === 'type') {
+          input.className = 'form-select';
+          for (const [value, text] of [['', 'Unconfirmed'], ['garage-door', 'Garage door'], ['gate', 'Gate']]) {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = text;
+            input.append(option);
+          }
+          input.value = thing.override?.type || '';
+        } else {
+          input.type = 'checkbox';
+          input.className = 'form-check-input';
+          input.checked = thing.override?.[key] === true;
+        }
+        const wrapper = document.createElement('div');
+        wrapper.className = 'mb-3';
+        label.htmlFor = input.id;
+        if (key === 'type') {
+          label.className = 'form-label';
+          label.textContent = labelText;
+          wrapper.append(label, input);
+        } else {
+          label.className = 'hb-uix-switch';
+          const text = document.createElement('span');
+          text.textContent = labelText;
+          const graphic = document.createElement('span');
+          graphic.className = 'hb-uix-slider hb-uix-round';
+          graphic.setAttribute('aria-hidden', 'true');
+          label.append(input, text, graphic);
+          const hint = document.createElement('small');
+          hint.className = 'form-text';
+          hint.id = input.id + '-help';
+          hint.textContent = key === 'disabled' ? 'Exclude this Thing from Apple Home.'
+            : 'Reverse the reported on/off or open/closed states.';
+          input.setAttribute('aria-describedby', hint.id);
+          wrapper.append(label, hint);
+        }
+        input.addEventListener('change', () => {
+          void draft.editThing(controllerKey, thing.controllerId, thing.id, key,
+            key === 'type' ? input.value || undefined : input.checked);
+          renderThings();
+          document.getElementById(input.id)?.focus({ preventScroll: true });
+        });
+        panel.append(wrapper);
+      }
+    });
+    const warnings = (result.things || []).filter(t => ['ambiguous-lighting', 'invalid-override', 'unsupported'].includes(t.status)).length;
+    if (warnings || result.counts?.invalid || result.counts?.duplicate || result.counts?.unknown || result.counts?.invalidOverrides) {
+      const warning = document.createElement('p');
+      warning.className = 'small';
+      warning.textContent = 'Discovery includes unsupported, ambiguous or invalid records. These are not operational; saved exceptions are retained.';
+      list.append(warning);
+    }
+    list.append(tabs);
+    if (cards.length) {
+      list.append(panel);
+    }
+    if (restoreFocus) {
+      (document.getElementById(restoreFocus) || tabs.querySelector('[aria-selected="true"]'))?.focus({ preventScroll: true });
     }
   }
 
@@ -247,5 +385,5 @@ try {
   void discovery.start();
 } catch {
   api.disableSaveButton();
-  status.textContent = 'Configuration could not be loaded safely. Close without saving and review the existing platform configuration.';
+  statusPresentation.show('Configuration could not be loaded safely. Close without saving and review the existing platform configuration.');
 }
