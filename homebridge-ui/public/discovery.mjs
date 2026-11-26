@@ -257,11 +257,15 @@ export function thingCards(result, overrides) {
       configurationStatus: invalid ? 'invalid overrides — preserved without editing'
         : override?.disabled ? 'excluded'
           : override?.type && capability !== 'unknown' && capability !== 'garage-gate-capable' ? 'incompatible type'
-            : capability === 'garage-gate-capable' ? (override?.type || 'garage/gate decision required')
+            : capability === 'garage-gate-capable' ? (override?.type || 'garage-door (default)')
               : override ? 'draft overrides retained' : 'default — no override',
       // Saved backend safety verdict remains explicit; draft edits cannot qualify hardware.
       safetyStatus: observation?.status || 'unavailable',
-      qualification: 'unqualified', operational: false,
+      qualification: capability === 'garage-gate-capable' ? 'supported' : 'unqualified',
+      // This read-only view is not authority to issue commands; runtime uses saved settings.
+      operational: observation?.operational === true && result.status === 'present'
+        && !blocked && override?.disabled !== true
+        && capability === 'garage-gate-capable',
     };
   }).filter(Boolean);
 }

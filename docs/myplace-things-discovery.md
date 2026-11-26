@@ -1,3 +1,25 @@
+# Native garage doors and gates (Increment 3B)
+
+DIP 3 and DIP 10 Things with complete valid inventory and endpoint observations now
+create native GarageDoorOpener accessories automatically. The default presentation
+is garage-door; the optional gate/garage-door selector does not change UUID or service.
+No default override is saved. Disable removes the accessory; re-enable uses the same
+composite MID/Thing-ID UUID but Apple Home assignments after removal are not guaranteed.
+
+Raw 0 means Closed and raw 100 means Open. Invert reverses both command and reported
+endpoint interpretation exactly once. Current state follows fresh controller reports;
+target may show an accepted pending request. Confirmation establishes controller
+readback only. No movement, position estimation or independent obstruction feedback
+is available. ObstructionDetected=false is the legacy compatibility convention,
+not proof of an unobstructed doorway. Failed communication is a HomeKit error.
+
+Invalid, partial, missing or stale observations retain existing accessories unavailable.
+Only explicit valid exclusions remove them. Blinds, relay and lighting Things are not
+operational through this integration. Existing myLights behaviour is unchanged.
+Production command admission uses saved settings, never the custom UI draft.
+DIP 10 firmware behaviour and physical readback timing remain beta validation topics.
+The foundation below remains shared by runtime eligibility and read-only UI discovery.
+
 # MyPlace Things discovery foundation (unreleased)
 
 This increment exposes `discoverThings(snapshot)` and `observeThings(pollState)`
@@ -72,23 +94,16 @@ synthetic 5,000-record collection.
 
 ## Increment 2A revision: discovery with sparse exceptions
 
-Automatic discovery, future automatic exposure for **separately qualified**
-hardware, and configuration only where necessary. This increment is read-only:
-no Things accessories, controller commands, timers, polling loops or runtime
-manager changes. Existing HVAC and LightManager behaviour remains unchanged.
-The pure `configureThings(pollState, device.things)` helper consumes Increment 1
-observations. It is not yet wired into platform callbacks or a custom UI.
+Automatic discovery and sparse exceptions are shared by runtime and configuration UI.
+The pure configureThings helper reports supported garage/gate capabilities and operational
+eligibility for complete valid endpoint observations. Runtime additionally validates
+freshness, command faults and saved configuration. Other capabilities remain unqualified
+and non-operational. UI discovery never sends commands or saves configuration.
 
-Every result explicitly has `qualification: "unqualified"` and
-`operational: false`. Neither a DIP classification, endpoint value nor user
-confirmation can change these fields. An automatic candidate needs no user
-configuration, but is **not** qualified to operate. Future operational exposure
-requires a separate, evidence-backed qualification and accessory increment.
-
-| Numeric DIP | Capability | Intended future policy after qualification |
+| Numeric DIP | Capability | Policy |
 | --- | --- | --- |
 | 1, 2 | Blind-capable | Automatic; no continuous position inferred |
-| 3, 10 | Garage/gate-capable | Require garage-door versus gate confirmation and separate safety qualification |
+| 3, 10 | Garage/gate-capable | Automatic GarageDoorOpener; optional garage/gate presentation |
 | 4 | On/Off light-capable | Automatic, subject to lighting identity resolution |
 | 5 | Dimmable light-capable | Automatic, subject to dimming and lighting identity qualification |
 | 8 | General relay-capable | Automatic Switch only after maintained-output behaviour is verified |
@@ -119,10 +134,10 @@ The example below documents the internal format, not a manual setup requirement:
 Only `controllerId` and `id` are required within an override. Optional fields:
 
 - `disabled: true`: explicit exclusion. Preserve the entire entry while disabled.
-  False or omission restores default candidate eligibility, not qualification.
+  False or omission restores default eligibility subject to capability and observation validity.
 - `invert: true`: swap logical endpoints only. False or omission leaves them as
   reported. Toggling disabled must not discard inversion or type confirmation.
-- `type: "garage-door" | "gate"`: physical-type confirmation, valid only for a
+- `type: "garage-door" | "gate"`: optional presentation override (default garage-door), valid only for a
   reported garage/gate capability. There is no type/default requirement for
   blinds, lights or ordinary relays.
 
@@ -155,9 +170,8 @@ exceptions without pretending there is a current observation:
 
 | Status | Meaning |
 | --- | --- |
-| automatic-candidate | Known capability with no required user decision; still unqualified |
-| needs-type | Garage/gate capability awaiting physical-type confirmation |
-| confirmed-candidate | Compatible garage/gate confirmation; still unqualified |
+| automatic-candidate | Known capability with no required user decision; garage/gate endpoints may operate |
+| confirmed-candidate | Compatible optional garage/gate presentation |
 | excluded | Explicitly disabled; settings retained, current reading only if available |
 | unsupported | Unknown capability |
 | unavailable | Saved identity without a current valid observation |
@@ -207,10 +221,7 @@ true (or present but invalid); true with an empty collection is contradictory.
 An explicit false with no collection is not ambiguous. Omitted capability
 metadata retains candidate-only behaviour, not proof of physical separation.
 Names are never used for deduplication. Different IDs do not prove different
-physical equipment either; all candidates remain unqualified. Future automatic
-exposure must establish reliable collection semantics or cross-references first,
-and keep unresolved overlaps unexposed. This increment cannot create duplicates
-because it registers no accessories at all.
+physical equipment either. Unresolved lighting overlaps remain unavailable, including garage/gate ID collisions.
 
 ## Next review gate: hybrid discovery interface
 
@@ -226,8 +237,8 @@ they are discovered. Unknown or unsupported discoveries remain diagnostic only.
 Existing identifiable saved overrides remain accessible, including lights and
 unavailable identities, and are preserved even when editing is unsafe.
 
-Automatic UI presentation is not automatic operational exposure: all Things
-remain unqualified and non-operational. No new capabilities or override fields
+Automatic UI presentation does not authorise commands. Only valid garage/gate Things
+are operational through the saved runtime configuration. No new capabilities or override fields
 are introduced. Discovery, rendering and selection never create saved entries;
 only explicit user edits create or change sparse overrides.
 
@@ -235,13 +246,8 @@ Keep saved exceptions discoverable offline. Disabling/re-enabling must update
 only the disabled flag and preserve other overrides. Do not silently save every
 discovered device or remove entries on failed/partial reads.
 
-That independently reviewed increment should define a bounded, sanitised,
-read-only bridge from existing coordinator snapshots to the UI, with explicit
-freshness and controller-replacement handling, and test save/reload preservation.
-No custom UI or snapshot transport is implemented here. Qualification of relay
-mode, light identity/dimming, blind behaviour and garage/gate safety is separate;
-writes and operational accessories require further approval and hardware evidence.
-This foundation has no new package version or physical hardware qualification.
+The custom UI uses bounded read-only discovery with saved/draft separation.
+Relay and blind controls remain deferred. No hardware qualification settings are introduced.
 
 ## Inventory completeness contract
 
@@ -269,25 +275,21 @@ confirmation: success means the same controller/Thing reports the planned raw
 endpoint, not that electrical output or physical equipment state was verified.
 Ambiguous delivery is read back and never automatically resent.
 
-Production qualification defaults to denied. The optional final coordinator
-constructor argument is an internal code-injected policy (override reader and
-identity qualification callback), used only by synthetic tests. No platform
-configuration, DIP value, UI option or sparse override can supply it. The
-production platform is unchanged and supplies no policy or Thing setters.
-Discovery projections still return unqualified/non-operational Things.
+A bare coordinator denies Thing commands. The production platform explicitly supplies
+saved sparse overrides and the garage/gate policy. The legacy internal qualifies callback
+remains available only for synthetic relay regression tests. It is not user configuration.
+Production does not enable relays or blinds.
 
 The planner requires a non-failed snapshot younger than 90 seconds, consistent
 system data, a complete unambiguous Things inventory, the exact composite
-identity, relay capability, valid endpoint, allowed overrides and no lighting
+identity, supported capability, valid endpoint, allowed overrides and no lighting
 ambiguity. Missing timestamps and future timestamps fail closed. It rechecks
 eligibility at admission, preflight, dispatch and confirmation. Inversion maps
 the logical target once; readback compares the raw endpoint and rejects changes
 to inversion during execution. Last-good failed reads never authorize writes.
 
-This increment creates no accessories and does not qualify DIP 8 as maintained.
-Actual relay mode, endpoint semantics, wiring, readback meaning, firmware and
-lighting overlap still require separately approved hardware qualification.
-Blinds, pulses, movement, obstruction and physical position are out of scope.
+DIP 8 production operation remains deferred. Blinds, pulses, movement estimation,
+obstruction sensing and physical position confirmation remain out of scope.
 
 
 Review hardening: Thing intentions retain their admitted raw endpoint. Planning

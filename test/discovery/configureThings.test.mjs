@@ -27,19 +27,19 @@ test('omitted or empty overrides retain discovery and automatic candidates witho
   assert.equal(omitted.things[0].operational, false);
 });
 
-test('all supported DIP categories select automatic candidates or garage/gate decisions, never operational controls', () => {
+test('DIP categories enable only garage/gate endpoints, without requiring a type override', () => {
   for (const dip of [1, 2, 3, 4, 5, 8, 10]) {
     const data = snapshot({ t1: record('t1', dip) });
     const decision = dip === 3 || dip === 10;
     const t = read(data).things[0];
-    assert.equal(t.status, decision ? 'needs-type' : 'automatic-candidate');
+    assert.equal(t.status, 'automatic-candidate');
     assert.equal(t.observation.physicalSubtype, 'undetermined');
     for (const type of ['garage-door', 'gate']) {
       const configured = read(data, [config({ type })]).things[0];
       assert.equal(configured.status, decision ? 'confirmed-candidate' : 'invalid-override');
       assert.equal(configured.value.status, decision ? 'valid' : 'unavailable');
-      assert.equal(configured.qualification, 'unqualified');
-      assert.equal(configured.operational, false);
+      assert.equal(configured.qualification, decision ? 'supported' : 'unqualified');
+      assert.equal(configured.operational, decision);
     }
   }
 });
@@ -140,7 +140,7 @@ test('disable and re-enable retain type, inversion and identity without storing 
   assert.equal(enabled.identity, disabled.identity);
   assert.equal(enabled.override.type, 'gate');
   assert.equal(enabled.value.logicalValue, 0);
-  assert.equal(enabled.operational, false);
+  assert.equal(enabled.operational, true);
   delete entry.disabled;
   assert.equal(byId(read(snapshot(), [entry])).status, 'confirmed-candidate');
   assert.deepEqual(byId(read(snapshot(), [config()])).override, config());
@@ -154,7 +154,7 @@ test('overlapping Thing IDs on independent controllers never share overrides', (
   assert.equal(b.value.logicalValue, 100);
   const replacement = read(snapshot(undefined, 'other'), [config({ type: 'gate', invert: true })]);
   assert.equal(byId(replacement).status, 'unavailable');
-  assert.equal(byId(replacement, 't1', 'other').status, 'needs-type');
+  assert.equal(byId(replacement, 't1', 'other').status, 'automatic-candidate');
   assert.equal(byId(replacement, 't1', 'other').override, undefined);
 });
 
@@ -170,7 +170,7 @@ test('rename and controller IP changes preserve identity; replacement controller
   const r = read(data, [entry]);
   assert.equal(byId(r).status, 'excluded');
   assert.equal(byId(r).value.status, 'unavailable');
-  assert.equal(byId(r, 't1', 'replacement-controller').status, 'needs-type');
+  assert.equal(byId(r, 't1', 'replacement-controller').status, 'automatic-candidate');
 });
 
 test('partial inventories preserve valid peers and retained overrides without removal instructions', () => {

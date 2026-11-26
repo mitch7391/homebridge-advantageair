@@ -185,7 +185,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Stop failed; inspect the output.' }
 This uses the same simulator, historical `/setLight` endpoint, normal polling,
 and managed Homebridge workers. The fixture has `aircons: {}`, two relay lights
 (Porch Light, Utility Light), and two dimmers (Living Light, Bedroom Light).
-There are no groups or Things. It is a synthetic standalone topology assembled
+It also contains Garage Door (DIP 3, initially Closed) and Driveway Gate (DIP 10, initially Open), with independent IDs garage1 and gate1. No type overrides are required. It is a synthetic standalone topology assembled
 from the existing sanitised light patterns, not a real standalone capture.
 
 The profile creates `myplace-extras/storage` beneath the existing lab runtime
@@ -195,7 +195,7 @@ pairing data. Pair **MyPlace Extras Lab** once in Apple Home, using the PIN in
 `myplace-extras/storage/config.json` beneath the base runtime. Subsequent starts preserve that profile's identity.
 The original AC lab storage and any real Homebridge installation remain unchanged.
 Existing AC test accessories from the original bridge may still appear in Home
-as unavailable while that bridge is stopped; this profile itself exposes only lights.
+as unavailable while that bridge is stopped; this profile exposes lights and garage/gate accessories.
 
 Use the same profile on management commands. Run in the **Windows terminal**:
 
@@ -209,3 +209,31 @@ The profiles share the established lab ports and cannot run simultaneously.
 Stop the active profile before starting another. A Homebridge-only restart
 preserves simulator state; a fresh simulator start reloads the selected fixture.
 Without `--profile`, the existing percentage/MyZone workflow is unchanged.
+
+
+## Garage/gate acceptance (not yet physically beta validated)
+
+Use the existing myplace-extras profile and ownership checks above. Do not start it
+alongside another profile: ports are shared. Preserve its existing storage and pairing.
+The fixture has no air conditioners. Confirm four lights plus two GarageDoorOpener
+accessories, then exercise Open/Close and compare simulator logs for one /setThing
+request per accepted command. Current state must follow readback, not movement timing.
+
+For an external simulated change, after verifying ownership of the loopback simulator,
+use PowerShell: Invoke-WebRequest -UseBasicParsing -Uri
+'http://127.0.0.1:52025/setThing?json=%7B%22id%22%3A%22garage1%22%2C%22value%22%3A100%7D'.
+Use value 0 for Closed; use gate1 to change only the gate. Never substitute a real IP.
+
+In isolated saved devices[0].things, an optional entry is
+{ "controllerId": "lab-myplace-extras", "id": "garage1", "invert": true }.
+Use type "gate" or disabled true as separate scenarios; preserve unrelated fields.
+Save/restart only the managed lab Homebridge. Verify inversion, disable/re-enable,
+stable UUIDs, rename, rapid opposing targets, external operation and outage/recovery.
+Homebridge-only restart must preserve simulator state and cached identities.
+Do not infer obstruction or intermediate movement from this simulator.
+
+For mixed HVAC coverage, load a disposable composition of the existing myzone.json
+fixture and the Extras myLights/myThings collections through the same fixture loader,
+after the documented queue reset. Keep the chosen system MID stable and scoped overrides
+consistent. Do not replace the established fixtures or paired storage during acceptance.
+No simulator process was launched for implementation. Functional commissioning is separate.

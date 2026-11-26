@@ -1,5 +1,7 @@
 import { claimController } from './discovery/controllerOwnership.js';
 import { lightId } from './api/lightCommand.js';
+import { GarageDoorManager } from './accessories/garageDoorManager.js';
+import { garageDoorPolicy } from './api/thingCommand.js';
 import { LightManager } from './accessories/lightManager.js';
 import { detailedDebug, HomeNames } from './discovery/homeNames.js';
 import { TimerValveManager } from './accessories/timerValveManager.js';
@@ -36,6 +38,7 @@ interface ConfiguredController {
   percentageManager: PercentageZoneManager;
   timerManager: TimerValveManager;
   lightManager: LightManager;
+  garageDoorManager: GarageDoorManager;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -83,6 +86,7 @@ export class AdvantageAirPlatform implements DynamicPlatformPlugin {
         controller.percentageManager.stop();
         controller.timerManager.stop();
         controller.lightManager.stop();
+        controller.garageDoorManager.stop();
       }
     });
   }
@@ -98,6 +102,7 @@ export class AdvantageAirPlatform implements DynamicPlatformPlugin {
     PercentageZoneManager.prepareCachedAccessory(this.api, accessory);
     TimerValveManager.prepareCachedAccessory(this.api, accessory);
     LightManager.prepareCachedAccessory(this.api, accessory);
+    GarageDoorManager.prepareCachedAccessory(this.api, accessory);
   }
 
   private configureControllers(devices: unknown): void {
@@ -310,7 +315,10 @@ export class AdvantageAirPlatform implements DynamicPlatformPlugin {
             diagnostic(name, event.name, 'MyZone', event.zoneName,
               event.step + ' step:', event.outcome, event.reason ?? '');
           }
-        });
+        }, garageDoorPolicy(() => device.things));
+
+        const garageDoorManager = new GarageDoorManager(this.api, this.accessories, poller, () => device.things);
+        updateManagers.push(state => garageDoorManager.update(state));
 
         const switchManager = new ZoneSwitchManager(
           this.api,
@@ -359,7 +367,7 @@ export class AdvantageAirPlatform implements DynamicPlatformPlugin {
 
         this.controllers.push({
           refreshAccessories: () => refreshAccessories(poller), name, debug, poller,
-          switchManager, thermostatManager, modeFanManager, percentageManager, myZoneManager, timerManager, lightManager,
+          switchManager, thermostatManager, modeFanManager, percentageManager, myZoneManager, timerManager, lightManager, garageDoorManager,
         });
       } catch (error) {
         const reason = error instanceof Error

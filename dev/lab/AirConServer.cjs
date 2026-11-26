@@ -790,19 +790,14 @@ const requestListener = function (req, res)
                }
             } else if (setThingInProgress == true )
             {
-               // log( `In json before, value: ${value}` );
-
-               // Sets do not have .myThings at the beginning. Add it.
-               value="{myThings:{things:" + value + "}}";
-
-               // Parsing {id:{"6801801", value:0}" }
-               //The first replace changes the last key/value pair
-               //The second replace changes the keys
-               quotedValues=value.replace(/(\{|,)\s*(.+?)\s*:/g, '$1"$2":');
-               // log( `In json after, value: ${quotedValues}` );
-
-               // Parse the given jqPath, to a json object
-               let setStatementObj = JSON.parse( quotedValues );
+               // Native v4 sends strict JSON. Preserve the legacy unquoted form too.
+               let thing;
+               try {
+                  thing = JSON.parse(value);
+               } catch {
+                  thing = JSON.parse(value.replace(/(\{|,)\s*(.+?)\s*:/g, '$1"$2":'));
+               }
+               let setStatementObj = { myThings: { things: thing } };
 
                if ( setStatementObj.result == false )
                {
