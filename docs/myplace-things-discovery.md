@@ -258,3 +258,45 @@ complete discovery record. Failed reads always give unavailable with no Things.
 Future consumers must not remove cached accessories based on partial, malformed,
 absent or unavailable results. Even a complete snapshot is only inventory evidence,
 not physical removal confirmation; lifecycle policy remains a separate increment.
+
+
+## Increment 3A: synthetic command foundation
+
+The native client now has a strictly validated, single-Thing endpoint transport.
+The coordinator admits logical maintained-relay targets through its existing
+queue, fresh preflight and bounded readback path. An acknowledgement is not
+confirmation: success means the same controller/Thing reports the planned raw
+endpoint, not that electrical output or physical equipment state was verified.
+Ambiguous delivery is read back and never automatically resent.
+
+Production qualification defaults to denied. The optional final coordinator
+constructor argument is an internal code-injected policy (override reader and
+identity qualification callback), used only by synthetic tests. No platform
+configuration, DIP value, UI option or sparse override can supply it. The
+production platform is unchanged and supplies no policy or Thing setters.
+Discovery projections still return unqualified/non-operational Things.
+
+The planner requires a non-failed snapshot younger than 90 seconds, consistent
+system data, a complete unambiguous Things inventory, the exact composite
+identity, relay capability, valid endpoint, allowed overrides and no lighting
+ambiguity. Missing timestamps and future timestamps fail closed. It rechecks
+eligibility at admission, preflight, dispatch and confirmation. Inversion maps
+the logical target once; readback compares the raw endpoint and rejects changes
+to inversion during execution. Last-good failed reads never authorize writes.
+
+This increment creates no accessories and does not qualify DIP 8 as maintained.
+Actual relay mode, endpoint semantics, wiring, readback meaning, firmware and
+lighting overlap still require separately approved hardware qualification.
+Blinds, pulses, movement, obstruction and physical position are out of scope.
+
+
+Review hardening: Thing intentions retain their admitted raw endpoint. Planning
+(including no-write outcomes) and final pre-dispatch validation reject changed
+interpretation. Final local validation runs before dispatch/unresolved flags;
+local refusal does not trigger delivery reconciliation or cancel unrelated work.
+Fresh structurally valid Thing confirmation snapshots are published before the
+Thing matcher, with cancellation checks before and after publication. A failed
+matcher then faults the command without discarding valid controller communication.
+Non-Thing observation ordering remains unchanged. Queued intentions expire after
+60 seconds; selection instead starts the existing bounded preflight/execution
+phases, still subject to the existing admission-relative overall deadline.

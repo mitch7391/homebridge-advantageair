@@ -1,3 +1,5 @@
+import { thingPayload } from './thingCommand.js';
+import type { ThingEndpoint } from './thingCommand.js';
 import { lightPayload } from './lightCommand.js';
 import { validateTimerWrite } from './timerCommand.js';
 import type { TimerField } from './timerCommand.js';
@@ -11,7 +13,7 @@ import type { SystemData } from './systemData.js';
 
 export interface RequestDiagnostic {
   id: number;
-  endpoint: '/getSystemData' | '/setAircon' | '/setLight';
+  endpoint: '/getSystemData' | '/setAircon' | '/setLight' | '/setThing';
   event: 'send' | 'headers' | 'body' | 'error';
   elapsedMs: number;
   status?: number;
@@ -88,6 +90,18 @@ export class AdvantageAirClient {
     this.endpoint = new URL(`http://${host}:${port}/getSystemData`);
     this.timeoutMs = timeoutMs;
     this.onDiagnostic = options.onDiagnostic;
+  }
+
+  async requestThing(id: string, value: ThingEndpoint, signal?: AbortSignal): Promise<unknown> {
+    const payload = thingPayload(id, value);
+    const endpoint = new URL('/setThing', this.endpoint);
+    endpoint.searchParams.set('json', payload);
+    this.inFlight = undefined;
+    const response = await this.requestJson(endpoint, signal);
+    if (response === false) {
+      throw new AirconCommandRejectedError('Controller rejected the Thing command.');
+    }
+    return response;
   }
 
   async requestLight(id: string, field: 'state' | 'value', value: boolean | number, signal?: AbortSignal): Promise<unknown> {
@@ -302,7 +316,8 @@ export class AdvantageAirClient {
     const diagnostic = (event: RequestDiagnostic['event'], details: Partial<RequestDiagnostic> = {}) => {
       try {
         this.onDiagnostic?.({
-          id, endpoint: endpoint.pathname === '/setLight' ? '/setLight' : endpoint.pathname === '/setAircon' ? '/setAircon' : '/getSystemData',
+          id, endpoint: endpoint.pathname === '/setThing' ? '/setThing'
+            : endpoint.pathname === '/setLight' ? '/setLight' : endpoint.pathname === '/setAircon' ? '/setAircon' : '/getSystemData',
           event, elapsedMs: Math.round(performance.now() - started), ...details,
         });
       } catch {

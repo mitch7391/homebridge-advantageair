@@ -204,3 +204,45 @@ test('rejects invalid connection settings', () => {
     assert.throws(() => new AdvantageAirClient(options));
   }
 });
+
+
+test('Thing endpoint encodes one strict payload, validates before dispatch and labels diagnostics', async t => {
+  const calls = [], diagnostics = [];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls.push([url, options]); return { ok: true, status: 200, text: async () => 'true' };
+  });
+  const client = new AdvantageAirClient({ ipAddress: '192.0.2.1', onDiagnostic: event => diagnostics.push(event) });
+  for (const value of [0, 100]) {
+    await client.requestThing('relay_1', value);
+    const [url] = calls.at(-1);
+    assert.equal(url.pathname, '/setThing');
+    assert.equal(url.searchParams.get('json'), JSON.stringify({ id: 'relay_1', value }));
+    assert.match(url.search, /%7B%22id%22/);
+  }
+  await assert.rejects(client.requestThing('bad/id', 0));
+  await assert.rejects(client.requestThing('relay_1', 50));
+  assert.equal(calls.length, 2);
+  assert(diagnostics.every(event => event.endpoint === '/setThing'));
+  const controller = new globalThis.AbortController(); controller.abort();
+  await assert.rejects(client.requestThing('relay_1', 0, controller.signal));
+  assert.equal(calls.length, 2);
+});
+
+for (const [label, response] of [
+  ['rejected', async () => ({ ok: true, status: 200, text: async () => 'false' })],
+  ['connection', async () => {
+    throw new Error('private connection');
+  }],
+  ['http', async () => ({ ok: false, status: 503 })],
+  ['body', async () => ({ ok: true, status: 200, text: async () => {
+    throw new Error('private body');
+  } })],
+]) {
+  test('Thing transport failure remains a write failure: ' + label, async t => {
+    const diagnostics = [];
+    t.mock.method(globalThis, 'fetch', response);
+    const client = new AdvantageAirClient({ ipAddress: '192.0.2.1', onDiagnostic: event => diagnostics.push(event) });
+    await assert.rejects(client.requestThing('a', 100), error => !(error instanceof TransientControllerReadError));
+    assert(diagnostics.every(event => event.endpoint === '/setThing'));
+  });
+}
