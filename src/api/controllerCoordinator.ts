@@ -1,3 +1,5 @@
+import { planThing, denyThingCommands, ThingCommandError } from './thingCommand.js';
+import type { ThingCommandPolicy, ThingEndpoint } from './thingCommand.js';
 import { observeLights, lightBrightness, LightCommandError } from './lightCommand.js';
 import { nativeTimer, planTimer, timerDuration, timerMatches } from './timerCommand.js';
 import type { TimerField } from './timerCommand.js';
@@ -17,10 +19,11 @@ import { temperatureConfirmation } from './thermostatPatch.js';
 import type { ThermostatPatch } from './thermostatPatch.js';
 import type { ThermostatMode } from '../accessories/legacyState.js';
 import { fanSpeedPercentage, thermostatCurrentTemperature, thermostatTargetMode, thermostatTargetTemperature, zoneIsOpen } from '../accessories/legacyState.js';
-import { ControllerBusyError } from './systemData.js';
+import { ControllerBusyError, validateSystemData } from './systemData.js';
 import { AirconCommandRejectedError, TransientControllerReadError } from './advantageAirClient.js';
 
 export interface ControllerClient {
+  requestThing?(id: string, value: ThingEndpoint, signal?: AbortSignal): Promise<unknown>;
   requestLight?(id: string, field: 'state' | 'value', value: boolean | number, signal?: AbortSignal): Promise<unknown>;
   requestTimer?(aircon: string, field: TimerField, minutes: number, signal?: AbortSignal): Promise<unknown>;
   requestMyZoneSelection?(aircon: string, zoneNumber: number, signal?: AbortSignal): Promise<unknown>;
@@ -40,9 +43,9 @@ export type ControllerCommandConfirmation = {
   name: string;
   outcome: 'confirmed' | 'unchanged';
   superseded: boolean;
-} & Request;
+} & Exclude<Request, { kind: 'thing' }>;
 
-type Request = { kind: 'lightOn'; on: boolean }
+type Request = { kind: 'thing'; on: boolean; raw: ThingEndpoint } | { kind: 'lightOn'; on: boolean }
   | { kind: 'lightBrightness'; brightness: number }
   | { kind: 'timer'; active: boolean; seconds: number; replace: boolean }
   | { kind: 'zone'; on: boolean; percentageOnly?: boolean }
@@ -53,11 +56,11 @@ type Request = { kind: 'lightOn'; on: boolean }
   | { kind: 'fan'; percentage: number }
   | { kind: 'myZone'; zoneIdentity: string; zoneName: string };
 
-type ExecutionPlan = { kind: 'unchanged' } | {
+type ExecutionPlan = { validate?: () => void } & ({ kind: 'unchanged' } | {
   kind: 'command';
   send: (signal: AbortSignal) => Promise<unknown>;
   matches: (data: SystemData) => boolean;
-};
+});
 
 type Intent = Request & {
   identity: string;
@@ -92,6 +95,7 @@ export class ControllerCoordinator {
     private readonly onConfirmation?: (event: ControllerCommandConfirmation) => void,
     private readonly onSending?: (name: string, target: string) => void,
     private readonly onMyZoneProgress?: (event: MyZoneProgress) => void,
+    private readonly thingPolicy: ThingCommandPolicy = denyThingCommands,
   ) {}
 
   start(): void {
@@ -113,6 +117,15 @@ export class ControllerCoordinator {
     }
     this.desired.clear();
     this.queued.clear();
+  }
+
+  requestThing(identity: string, on: boolean): void {
+    this.available();
+    if (!this.client.requestThing) {
+      throw new ThingCommandError('Thing transport unavailable.');
+    }
+    const plan = planThing(this.state, identity, on, this.thingPolicy);
+    this.admit(identity, 'Thing ' + plan.id, { kind: 'thing', on, raw: plan.raw });
   }
 
   private light(data: SystemData, identity: string) {
@@ -424,7 +437,8 @@ export class ControllerCoordinator {
   private admit(identity: string, name: string, request: Request): void {
     const key = this.key(identity, request.kind);
     const previous = this.desired.get(key);
-    if (previous && ((request.kind === 'lightOn' && previous.kind === 'lightOn' && request.on === previous.on)
+    if (previous && ((request.kind === 'thing' && previous.kind === 'thing' && request.on === previous.on && request.raw === previous.raw)
+      || (request.kind === 'lightOn' && previous.kind === 'lightOn' && request.on === previous.on)
       || (request.kind === 'lightBrightness' && previous.kind === 'lightBrightness' && request.brightness === previous.brightness)
       || (request.kind === 'zone' && previous.kind === 'zone' && request.on === previous.on
       && request.percentageOnly === previous.percentageOnly)
@@ -487,6 +501,22 @@ export class ControllerCoordinator {
   }
 
   private plan(data: SystemData, intent: Intent): ExecutionPlan {
+    if (intent.kind === 'thing') {
+      const fresh = (snapshot: SystemData): ControllerPollState => ({ data: snapshot, lastAttemptFailed: false, lastSuccessAt: Date.now() });
+      const plan = planThing(fresh(data), intent.identity, intent.on, this.thingPolicy);
+      const validate = () => {
+        const current = planThing(fresh(data), intent.identity, intent.on, this.thingPolicy);
+        if (current.raw !== intent.raw) {
+          throw new ThingCommandError('Thing configuration changed the accepted endpoint.');
+        }
+      };
+      validate();
+      return plan.unchanged ? { kind: 'unchanged', validate } : {
+        kind: 'command', validate,
+        send: signal => this.client.requestThing!(plan.id, intent.raw, signal),
+        matches: current => plan.matches(fresh(current)),
+      };
+    }
     if (intent.kind === 'lightOn' || intent.kind === 'lightBrightness') {
       const light = this.light(data, intent.identity);
       const field = intent.kind === 'lightOn' ? 'state' : 'value';
@@ -663,7 +693,11 @@ export class ControllerCoordinator {
     const superseded = this.desired.get(intent.key) !== intent;
     this.finish(intent);
     try {
-      const request: Request = intent.kind === 'lightOn' ? { kind: 'lightOn', on: intent.on }
+      if (intent.kind === 'thing') {
+        this.thingPolicy.onConfirmation?.({ identity: intent.identity, on: intent.on, outcome, superseded });
+        return;
+      }
+      const request: Exclude<Request, { kind: 'thing' }> = intent.kind === 'lightOn' ? { kind: 'lightOn', on: intent.on }
         : intent.kind === 'lightBrightness' ? { kind: 'lightBrightness', brightness: intent.brightness }
           : intent.kind === 'timer'
             ? { kind: 'timer', active: intent.active, seconds: intent.seconds, replace: intent.replace }
@@ -682,15 +716,16 @@ export class ControllerCoordinator {
   }
 
   private describe(intent: Intent): string {
-    return intent.kind === 'lightOn' ? (intent.on ? 'On' : 'Off')
-      : intent.kind === 'lightBrightness' ? 'brightness ' + intent.brightness + '%'
-        : intent.kind === 'timer' ? (intent.active ? 'timer ' + intent.seconds / 60 + ' minutes' : 'timer cancelled')
-          : intent.kind === 'zone' ? (intent.on ? 'Open' : 'Closed')
-            : intent.kind === 'percentage' ? 'zone percentage ' + intent.percentage + '%'
-              : intent.kind === 'modeFan' ? (intent.mode === 'vent' ? 'Ventilation' : 'Dry Mode') + (intent.on ? ' On' : ' Off')
-                : intent.kind === 'fan' ? 'fan speed ' + (intent.percentage === 100 ? 'Auto Mode' : fanSetting(intent.percentage).fan)
-                  : intent.kind === 'myZone' ? 'MyZone ' + intent.zoneName
-                    : intent.kind === 'mode' ? 'mode ' + intent.mode : 'target temperature ' + intent.temperature + ' °C';
+    return intent.kind === 'thing' ? 'controller-reported endpoint ' + (intent.on ? 'On' : 'Off')
+      : intent.kind === 'lightOn' ? (intent.on ? 'On' : 'Off')
+        : intent.kind === 'lightBrightness' ? 'brightness ' + intent.brightness + '%'
+          : intent.kind === 'timer' ? (intent.active ? 'timer ' + intent.seconds / 60 + ' minutes' : 'timer cancelled')
+            : intent.kind === 'zone' ? (intent.on ? 'Open' : 'Closed')
+              : intent.kind === 'percentage' ? 'zone percentage ' + intent.percentage + '%'
+                : intent.kind === 'modeFan' ? (intent.mode === 'vent' ? 'Ventilation' : 'Dry Mode') + (intent.on ? ' On' : ' Off')
+                  : intent.kind === 'fan' ? 'fan speed ' + (intent.percentage === 100 ? 'Auto Mode' : fanSetting(intent.percentage).fan)
+                    : intent.kind === 'myZone' ? 'MyZone ' + intent.zoneName
+                      : intent.kind === 'mode' ? 'mode ' + intent.mode : 'target temperature ' + intent.temperature + ' °C';
   }
 
   private fail(intent: Intent, reason: string): void {
@@ -702,7 +737,7 @@ export class ControllerCoordinator {
     }
     this.finish(intent);
     try {
-      const control = intent.kind === 'lightOn' || intent.kind === 'lightBrightness' ? 'Light'
+      const control = intent.kind === 'thing' ? 'Thing' : intent.kind === 'lightOn' || intent.kind === 'lightBrightness' ? 'Light'
         : intent.kind === 'timer' ? 'Timer' : intent.kind === 'zone' || intent.kind === 'percentage' ? 'Zone'
           : intent.kind === 'myZone' ? 'MyZone'
             : intent.kind === 'fan' || intent.kind === 'modeFan' ? 'Fan' : 'Thermostat';
@@ -941,6 +976,8 @@ export class ControllerCoordinator {
           this.finish(intent);
           return;
         }
+        plan.validate?.();
+        live();
         if (plan.kind === 'unchanged') {
           this.confirm(intent, 'unchanged');
           return;
@@ -968,6 +1005,8 @@ export class ControllerCoordinator {
           if (performance.now() >= preflightDeadline || deadline - performance.now() < 30000) {
             throw new ZoneCommandError('Preflight expired before the physical write.');
           }
+          plan.validate?.();
+          check();
           sent = true;
           unresolved = true;
           try {
@@ -984,8 +1023,15 @@ export class ControllerCoordinator {
             await this.wait(signal);
             const current = await this.readConfirmation(signal);
             check();
+            if (intent.kind === 'thing') {
+              validateSystemData(current);
+              this.observe(current);
+              check();
+            }
             const matches = plan.matches(current);
-            this.observe(current);
+            if (intent.kind !== 'thing') {
+              this.observe(current);
+            }
             check();
             if (matches) {
               unresolved = false;
