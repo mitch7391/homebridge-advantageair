@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { ThingSelection, thingCards } from '../../homebridge-ui/public/discovery.mjs';
 import { Draft, DraftStatusPresentation } from '../../homebridge-ui/public/draft.mjs';
 
-const observation = id => ({ id, controllerId: 'mid', name: 'Same name', capability: 'garage-gate-capable', status: 'needs-type' });
+const observation = id => ({ id, controllerId: 'mid', name: 'Same name', capability: 'garage-gate-capable', status: 'automatic-candidate' });
 const result = things => ({ status: 'present', things });
 const fixture = () => [{ platform: 'AdvantageAir', name: 'Log', future: true, devices: [
   { ipAddress: '192.0.2.1', hidden: 7, things: [{ controllerId: 'mid', id: 'a', invert: true, disabled: true }] },
@@ -58,9 +58,9 @@ test('draft status changes independently of the saved observation safety verdict
   const data = result([observation('a')]);
   const [card] = thingCards(data, [{ controllerId: 'mid', id: 'a', type: 'gate' }]);
   assert.equal(card.configurationStatus, 'gate');
-  assert.equal(card.safetyStatus, 'needs-type');
-  assert.equal(card.qualification, 'unqualified');
-  assert.equal(data.things[0].status, 'needs-type');
+  assert.equal(card.safetyStatus, 'automatic-candidate');
+  assert.equal(card.qualification, 'supported');
+  assert.equal(data.things[0].status, 'automatic-candidate');
 });
 
 test('keyed edits preserve complete objects, other controllers and sparse settings', async () => {
@@ -162,7 +162,7 @@ test('Thing presentation uses native switches, concise labels and one developmen
   assert(app.includes('Reverse the reported on/off or open/closed states'));
   assert.match(app, /'zoneControlType', 'port'/);
   assert.doesNotMatch(app, /Saved observation safety:|Physical state unknown|toLocaleTimeString|—/);
-  assert.equal(html.split('MyPlace Things control is not yet enabled in this development version.').length, 2);
+  assert.equal(html.split('Supported garage doors and gates use native HomeKit controls after saving and restarting.').length, 2);
   assert.match(html, /thing-tabs .nav-link { color: #fff/);
 });
 
@@ -248,4 +248,17 @@ test('presentation delay leaves rapid configuration dispatch and native Save saf
   assert.equal(sent.length, 2);
   callbacks[0]();
   assert.deepEqual(visible.at(-1), ['', false]);
+});
+
+
+test('saved garage support is displayed without letting draft edits enable an unsupported observation', () => {
+  const source = result([{ ...observation('a'), operational: true }]);
+  assert.equal(thingCards(source)[0].operational, true);
+  assert.equal(thingCards(source)[0].configurationStatus, 'garage-door (default)');
+  const disabled = [{ controllerId: 'mid', id: 'a', disabled: true }];
+  assert.equal(thingCards(source, disabled)[0].operational, false);
+  source.things[0].operational = false;
+  assert.equal(thingCards(source, [{ controllerId: 'mid', id: 'a', disabled: false }])[0].operational, false);
+  source.status = 'partial'; source.things[0].operational = true;
+  assert.equal(thingCards(source)[0].operational, false);
 });

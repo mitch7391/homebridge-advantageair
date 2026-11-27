@@ -156,7 +156,7 @@ function dto(token, state, overrides, reason) {
       unknown: configured.discovery.unknownRecords, invalidOverrides: configured.invalidOverrides },
     things: configured.things.map(thing => ({ controllerId: thing.controllerId, id: thing.id,
       name: thing.observation?.name ?? 'Configured Thing', capability: thing.observation?.capability ?? 'unknown',
-      status: thing.status, qualification: 'unqualified', operational: false, physicalState: 'unknown' })) };
+      status: thing.status, qualification: thing.qualification, operational: thing.operational, physicalState: 'unknown' })) };
 }
 
 export class DiscoveryService {

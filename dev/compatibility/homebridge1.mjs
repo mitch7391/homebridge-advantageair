@@ -1,3 +1,4 @@
+import { compatibilityFixture, inventorySummary, until as pollUntil } from './discovery-check.mjs';
 import assert from 'node:assert/strict';
 import { assertBetaPackage } from '../beta-policy.mjs';
 import fs from 'node:fs';
@@ -63,25 +64,8 @@ const capture = (command, args, target) => {
 const mark = message => {
   report.checks.push(message); console.log('PASS:', message);
 };
-const until = async (description, check, timeout = 30000) => {
-  const deadline = Date.now() + timeout;
-  let last;
-  while (Date.now() < deadline) {
-    for (const child of children) {
-      assert.ok(child.stopping || child.exitCode === null && child.signalCode === null, `Child exited; see ${child.log}`);
-    }
-    try {
-      const result = await check();
-      if (result) {
-        return result;
-      }
-    } catch (error) {
-      last = error;
-    }
-    await wait(200);
-  }
-  throw new Error(`${description} timed out${last ? ': ' + last.message : ''}`);
-};
+const until = (description, check, timeout = 30000, options = {}) =>
+  pollUntil(description, check, timeout, { ...options, children });
 const freePort = async () => {
   const server = net.createServer();
   await new Promise((resolve, reject) => {
@@ -173,25 +157,27 @@ try {
     const response = await fetch(url, { ...options, signal: AbortSignal.timeout(3000) });
     assert.ok(response.ok, `${options.method ?? 'GET'} ${url}: HTTP ${response.status}`);
     const text = await response.text();
-    return text ? JSON.parse(text) : undefined;
+    try {
+      return text ? JSON.parse(text) : undefined;
+    } catch {
+      // JSON parser messages can quote response bodies; retain only the failure category.
+      throw new SyntaxError('Invalid JSON response');
+    }
   };
   launch([path.join(root, 'dev/lab/AirConServer.cjs')], path.join(home, 'simulator.log'), { ...process.env, PORT: String(simPort) });
   await until('Simulator startup', async () => (await fetch(sim + '/reInit')).ok);
   const load = new URL(sim + '/');
-  const fixture = read(path.join(root, 'dev/lab/fixtures/myzone.json'));
-  const outputs = read(path.join(root, 'dev/lab/fixtures/lights-large.json')).myLights.lights;
-  const relay = Object.values(outputs).find(light => light.relay === true);
-  const dimmer = Object.values(outputs).find(light => typeof light.value === 'number');
-  fixture.myLights = { lights: {
-    relay1: { ...relay, id: 'relay1', name: 'Relay Output', state: 'off' },
-    dimmer1: { ...dimmer, id: 'dimmer1', name: 'Dimmer Output', state: 'off', value: 50 },
-  } };
-  fixture.system.hasLights = true;
+  const fixture = compatibilityFixture(read(path.join(root, 'dev/lab/fixtures/myzone.json')),
+    read(path.join(root, 'dev/lab/fixtures/lights-large.json')).myLights.lights);
   const fixtureFile = path.join(home, 'ac-lights-fixture.json');
   fs.writeFileSync(fixtureFile, JSON.stringify(fixture));
   load.searchParams.set('load', fixtureFile);
   assert.ok((await fetch(load)).ok);
   const state = async () => (await request(sim + '/getSystemData')).aircons.ac1;
+  const loaded = await request(sim + '/getSystemData');
+  assert.equal(loaded.myThings, undefined);
+  assert.deepEqual(loaded.aircons, fixture.aircons);
+  assert.deepEqual(loaded.myLights, fixture.myLights);
   assert.equal((await state()).info.myZone, 1);
   const config = { bridge: { name: 'AA HB1 compatibility', username: '0E:22:18:05:00:01', port: hapPort,
     pin, bind: ['127.0.0.1'], advertiser: 'ciao' }, plugins: [legacyName, name], accessories: [], platforms: [
@@ -211,10 +197,12 @@ try {
     hb = launch([...hook, path.join(home, 'node_modules/homebridge/bin/homebridge'), '-U', storage,
       '-P', path.join(home, 'node_modules'), '--strict-plugin-resolution', '-I', '-Q'], path.join(home, `${label}.log`));
     hb.homebridge = true;
+    let inventory = 'no successful HAP enumeration';
     return until('Homebridge discovery', async () => {
       const data = await hap('/accessories');
+      inventory = inventorySummary(data);
       return data.accessories.length === 13 && data.accessories;
-    });
+    }, 30000, { observation: () => inventory });
   };
   const short = type => type.replace(/-0000-1000-8000-0026BB765291$/i, '').replace(/^0+/, '').toUpperCase();
   const characteristic = (service, type) => service.characteristics.find(c => short(c.type) === type);

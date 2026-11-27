@@ -215,7 +215,7 @@ try {
         input.disabled = !thing.editable;
         if (key === 'type') {
           input.className = 'form-select';
-          for (const [value, text] of [['', 'Unconfirmed'], ['garage-door', 'Garage door'], ['gate', 'Gate']]) {
+          for (const [value, text] of [['', 'Garage door (default)'], ['garage-door', 'Garage door'], ['gate', 'Gate']]) {
             const option = document.createElement('option');
             option.value = value;
             option.textContent = text;

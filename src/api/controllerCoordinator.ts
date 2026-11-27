@@ -1,4 +1,4 @@
-import { planThing, denyThingCommands, ThingCommandError } from './thingCommand.js';
+import { eligibleThing, planThing, denyThingCommands, ThingCommandError } from './thingCommand.js';
 import type { ThingCommandPolicy, ThingEndpoint } from './thingCommand.js';
 import { observeLights, lightBrightness, LightCommandError } from './lightCommand.js';
 import { nativeTimer, planTimer, timerDuration, timerMatches } from './timerCommand.js';
@@ -117,6 +117,24 @@ export class ControllerCoordinator {
     }
     this.desired.clear();
     this.queued.clear();
+  }
+
+  readThing(identity: string, target = false): boolean {
+    this.available();
+    const thing = eligibleThing(this.state, identity, this.thingPolicy);
+    const key = this.key(identity, 'thing');
+    if (this.faults.has(key)) {
+      throw new ThingCommandError('Thing command could not be confirmed.');
+    }
+    const pending = this.desired.get(key);
+    if (target && pending?.kind === 'thing') {
+      // Revalidate the accepted interpretation even while displaying a pending target.
+      if (planThing(this.state, identity, pending.on, this.thingPolicy).raw !== pending.raw) {
+        throw new ThingCommandError('Thing configuration changed.');
+      }
+      return pending.on;
+    }
+    return thing.value.status === 'valid' && thing.value.logicalValue === 100;
   }
 
   requestThing(identity: string, on: boolean): void {

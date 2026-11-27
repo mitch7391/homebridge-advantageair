@@ -4,7 +4,8 @@
     "sysType": "e-zone",
     "hasAircons": false,
     "noOfAircons": 0,
-    "hasLights": true
+    "hasLights": true,
+    "hasThings": true
   },
   "aircons": {},
   "myLights": {
@@ -32,6 +33,22 @@
         "name": "Bedroom Light",
         "state": "off",
         "value": 75
+      }
+    }
+  },
+  "myThings": {
+    "things": {
+      "garage1": {
+        "id": "garage1",
+        "name": "Garage Door",
+        "channelDipState": 3,
+        "value": 0
+      },
+      "gate1": {
+        "id": "gate1",
+        "name": "Driveway Gate",
+        "channelDipState": 10,
+        "value": 100
       }
     }
   }

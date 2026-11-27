@@ -21,9 +21,9 @@ export interface ConfiguredThing {
   readonly observation?: ThingObservation;
   readonly status: 'automatic-candidate' | 'needs-type' | 'confirmed-candidate' | 'excluded'
     | 'unsupported' | 'unavailable' | 'invalid-override' | 'ambiguous-lighting';
-  // Capability and a user decision are not operational qualification. No override can change these.
-  readonly qualification: 'unqualified';
-  readonly operational: false;
+  // Supported means implemented protocol support, never independently verified physical feedback.
+  readonly qualification: 'supported' | 'unqualified';
+  readonly operational: boolean;
   readonly value: ThingValue;
 }
 export interface ConfiguredThings {
@@ -155,13 +155,16 @@ export function configureThings(state: ControllerPollState, input: unknown): Con
       && ['on-off-light-capable', 'dimmable-light-capable', 'relay-capable'].includes(capability!))) {
       status = 'ambiguous-lighting';
     } else if (capability === 'garage-gate-capable') {
-      status = override?.type ? 'confirmed-candidate' : 'needs-type';
+      status = override?.type ? 'confirmed-candidate' : 'automatic-candidate';
     } else {
       status = 'automatic-candidate';
     }
     return Object.freeze({ identity: key, controllerId: observation?.controllerId ?? entry!.controllerId,
       id: observation?.id ?? entry!.id, ...(override ? { override } : {}), ...(observation ? { observation } : {}), status,
-      qualification: 'unqualified' as const, operational: false as const,
+      qualification: capability === 'garage-gate-capable' ? 'supported' as const : 'unqualified' as const,
+      operational: discovery.status === 'present' && capability === 'garage-gate-capable'
+        && ['automatic-candidate', 'confirmed-candidate'].includes(status)
+        && observation?.valueStatus === 'reported' && [0, 100].includes(observation.reported.value as number),
       value: observation && ['automatic-candidate', 'needs-type', 'confirmed-candidate', 'excluded'].includes(status)
         ? interpretValue(observation, override?.invert ?? false) : unknownValue('unavailable') });
   });

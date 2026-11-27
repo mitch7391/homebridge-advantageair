@@ -9,10 +9,15 @@ export type ThingEndpoint = 0 | 100;
 /** Internal code injection only. No user configuration can supply qualification. */
 export interface ThingCommandPolicy {
   overrides: () => unknown;
+  garageDoors?: boolean;
   qualifies: (identity: string) => boolean;
   onConfirmation?: (event: { identity: string; on: boolean; outcome: 'confirmed' | 'unchanged'; superseded: boolean }) => void;
 }
 export const denyThingCommands: ThingCommandPolicy = Object.freeze({ overrides: () => undefined, qualifies: () => false });
+
+export const garageDoorPolicy = (overrides: () => unknown): ThingCommandPolicy => ({
+  overrides, garageDoors: true, qualifies: () => false,
+});
 
 export function thingPayload(id: string, value: ThingEndpoint): string {
   if (typeof id !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(id) || (value !== 0 && value !== 100)) {
@@ -30,10 +35,11 @@ export function eligibleThing(state: ControllerPollState, identity: string,
   validateSystemData(state.data);
   const projection = configureThings(state, policy.overrides());
   const thing = projection.things.find(t => t.identity === identity);
-  if (projection.discovery.status !== 'present' || !thing || thing.status !== 'automatic-candidate'
-    || thing.observation?.capability !== 'relay-capable' || thing.value.status !== 'valid'
-    || policy.qualifies(identity) !== true) {
-    throw new ThingCommandError('Thing is not eligible for a maintained relay command.');
+  const supported = policy.garageDoors === true ? thing?.operational === true
+    : thing?.status === 'automatic-candidate' && thing.observation?.capability === 'relay-capable'
+      && policy.qualifies(identity) === true;
+  if (projection.discovery.status !== 'present' || !thing || thing.value.status !== 'valid' || !supported) {
+    throw new ThingCommandError('Thing is not eligible for this command.');
   }
   return thing;
 }

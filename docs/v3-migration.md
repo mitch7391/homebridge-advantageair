@@ -45,8 +45,8 @@ legacy setup.
   Node 26 remains outside the current engine range.
 - Know how to stop/disable the Advantage Air entries or their dedicated Cmd4
   bridge. Do not disable unrelated Cmd4 accessories unnecessarily.
-- Check whether you use v3 features absent from native v4, such as MyPlace
-  Things, light groups/scenes or mode-specific legacy timers.
+- Check whether you use v3 features absent from native v4, such as blinds, relay Things, light groups/scenes or mode-specific legacy timers.
+  Native garage/gate Things use new composite identities; Cmd4 cache records are not migrated.
   Individual MyPlace lights are supported. See the zone layout options below
   for native presentation choices. Install only an announced release.
   These are not automatically replaced.
